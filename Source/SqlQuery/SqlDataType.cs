@@ -260,7 +260,12 @@ namespace LinqToDB.SqlQuery
 					if (underlyingType == typeof(TimeSpan))       return TimeSpan;
 					break;
 
+#if NETSTANDARD
+				case (TypeCode)2       :
+#else
 				case TypeCode.DBNull   :
+#endif
+
 				case TypeCode.Empty    :
 				default                : break;
 			}
@@ -326,6 +331,11 @@ namespace LinqToDB.SqlQuery
 				case DataType.Time             : return DbTime;
 				case DataType.DateTime2        : return DbDateTime2;
 				case DataType.DateTimeOffset   : return DbDateTimeOffset;
+				case DataType.UInt16           : return DbUInt16;
+				case DataType.UInt32           : return DbUInt32;
+				case DataType.UInt64           : return DbUInt64;
+				case DataType.Dictionary       : return DbDictionary;
+
 			}
 
 			throw new InvalidOperationException();
@@ -344,9 +354,9 @@ namespace LinqToDB.SqlQuery
 			return false;
 		}
 
-		#endregion
+#endregion
 
-		#region Default Types
+#region Default Types
 
 		internal SqlDataType(DataType dbType, Type type, int? length, int? precision, int? scale)
 		{
@@ -370,6 +380,9 @@ namespace LinqToDB.SqlQuery
 		public static readonly SqlDataType DbInt64          = new SqlDataType(DataType.Int64,          typeof(Int64),                  0, 0,                0);
 		public static readonly SqlDataType DbInt32          = new SqlDataType(DataType.Int32,          typeof(Int32),                  0, 0,                0);
 		public static readonly SqlDataType DbInt16          = new SqlDataType(DataType.Int16,          typeof(Int16),                  0, 0,                0);
+		public static readonly SqlDataType DbUInt64         = new SqlDataType(DataType.UInt64,         typeof(UInt64),                 0, 0,                0);
+		public static readonly SqlDataType DbUInt32         = new SqlDataType(DataType.UInt32,         typeof(UInt32),                 0, 0,                0);
+		public static readonly SqlDataType DbUInt16         = new SqlDataType(DataType.UInt16,         typeof(UInt16),                 0, 0,                0);
 		public static readonly SqlDataType DbSByte          = new SqlDataType(DataType.SByte,          typeof(SByte),                  0, 0,                0);
 		public static readonly SqlDataType DbByte           = new SqlDataType(DataType.Byte,           typeof(Byte),                   0, 0,                0);
 		public static readonly SqlDataType DbBoolean        = new SqlDataType(DataType.Boolean,        typeof(Boolean),                0, 0,                0);
@@ -428,6 +441,7 @@ namespace LinqToDB.SqlQuery
 		public static readonly SqlDataType CharArray        = new SqlDataType(DataType.NVarChar,       typeof(Char[]),      GetMaxLength,               0,  0);
 		public static readonly SqlDataType DateTimeOffset   = DbDateTimeOffset;
 		public static readonly SqlDataType TimeSpan         = DbTime;
+		public static readonly SqlDataType DbDictionary     = new SqlDataType(DataType.Dictionary,     typeof(Dictionary<string, string>), 0,          0,  0);
 
 #if !SILVERLIGHT && !NETFX_CORE
 		public static readonly SqlDataType SqlByte          = new SqlDataType(DataType.Byte,           typeof(SqlByte),                0,               0,  0);
@@ -448,9 +462,9 @@ namespace LinqToDB.SqlQuery
 		public static readonly SqlDataType SqlXml           = new SqlDataType(DataType.Xml,            typeof(SqlXml),                 0,               0,  0);
 #endif
 
-		#endregion
+#endregion
 
-		#region Overrides
+#region Overrides
 
 #if OVERRIDETOSTRING
 
@@ -461,9 +475,9 @@ namespace LinqToDB.SqlQuery
 
 #endif
 
-		#endregion
+#endregion
 
-		#region ISqlExpression Members
+#region ISqlExpression Members
 
 		public int Precedence
 		{
@@ -475,18 +489,18 @@ namespace LinqToDB.SqlQuery
 			get { return typeof(Type); }
 		}
 
-		#endregion
+#endregion
 
-		#region ISqlExpressionWalkable Members
+#region ISqlExpressionWalkable Members
 
 		ISqlExpression ISqlExpressionWalkable.Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
 		{
 			return func(this);
 		}
 
-		#endregion
+#endregion
 
-		#region IEquatable<ISqlExpression> Members
+#region IEquatable<ISqlExpression> Members
 
 		bool IEquatable<ISqlExpression>.Equals(ISqlExpression other)
 		{
@@ -497,9 +511,9 @@ namespace LinqToDB.SqlQuery
 			return Type == value.Type && Length == value.Length && Precision == value.Precision && Scale == value.Scale;
 		}
 
-		#endregion
+#endregion
 
-		#region ISqlExpression Members
+#region ISqlExpression Members
 
 		public bool CanBeNull
 		{
@@ -511,9 +525,9 @@ namespace LinqToDB.SqlQuery
 			return ((ISqlExpression)this).Equals(other) && comparer(this, other);
 		}
 
-		#endregion
+#endregion
 
-		#region ICloneableElement Members
+#region ICloneableElement Members
 
 		public ICloneableElement Clone(Dictionary<ICloneableElement, ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
 		{
@@ -528,9 +542,9 @@ namespace LinqToDB.SqlQuery
 			return clone;
 		}
 
-		#endregion
+#endregion
 
-		#region IQueryElement Members
+#region IQueryElement Members
 
 		public QueryElementType ElementType { get { return QueryElementType.SqlDataType; } }
 
@@ -546,6 +560,6 @@ namespace LinqToDB.SqlQuery
 			return sb;
 		}
 
-		#endregion
+#endregion
 	}
 }

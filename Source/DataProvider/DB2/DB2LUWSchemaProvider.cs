@@ -12,6 +12,9 @@ namespace LinqToDB.DataProvider.DB2
 
 	class DB2LUWSchemaProvider : SchemaProviderBase
 	{
+		private HashSet<string> _systemSchemas =
+			GetHashSet(new [] {"SYSCAT", "SYSFUN", "SYSIBM", "SYSIBMADM", "SYSPROC", "SYSPUBLIC", "SYSSTAT", "SYSTOOLS" },
+				StringComparer.OrdinalIgnoreCase);
 		protected override List<DataTypeInfo> GetDataTypes(DataConnection dataConnection)
 		{
 			DataTypesSchema = ((DbConnection)dataConnection.Connection).GetSchema("DataTypes");
@@ -47,16 +50,18 @@ namespace LinqToDB.DataProvider.DB2
 				let catalog = dataConnection.Connection.Database
 				let schema  = t.Field<string>("TABLE_SCHEMA")
 				let name    = t.Field<string>("TABLE_NAME")
-				where IncludedSchemas.Length != 0 || ExcludedSchemas.Length != 0 || schema == CurrenSchema
+				let system  = t.Field<string>("TABLE_TYPE") == "SYSTEM TABLE"
+				where IncludedSchemas.Count != 0 || ExcludedSchemas.Count != 0 || schema == CurrenSchema
 				select new TableInfo
 				{
-					TableID         = catalog + '.' + schema + '.' + name,
-					CatalogName     = catalog,
-					SchemaName      = schema,
-					TableName       = name,
-					IsDefaultSchema = schema.IsNullOrEmpty(),
-					IsView          = t.Field<string>("TABLE_TYPE") == "VIEW",
-					Description     = t.Field<string>("REMARKS"),
+					TableID            = catalog + '.' + schema + '.' + name,
+					CatalogName        = catalog,
+					SchemaName         = schema,
+					TableName          = name,
+					IsDefaultSchema    = schema.IsNullOrEmpty(),
+					IsView             = t.Field<string>("TABLE_TYPE") == "VIEW",
+					Description        = t.Field<string>("REMARKS"),
+					IsProviderSpecific = system || _systemSchemas.Contains(schema)
 				}
 			).ToList();
 		}
@@ -368,28 +373,34 @@ namespace LinqToDB.DataProvider.DB2
 
 		protected override List<ProcedureInfo> GetProcedures(DataConnection dataConnection)
 		{
+			var sql = @"
+				SELECT
+					PROCSCHEMA,
+					PROCNAME
+				FROM
+					SYSCAT.PROCEDURES
+				WHERE
+					" + GetSchemaFilter("PROCSCHEMA");
+
+			if (IncludedSchemas.Count == 0)
+				sql += " AND PROCSCHEMA NOT IN ('SYSPROC', 'SYSIBMADM', 'SQLJ', 'ADMINISTRATOR', 'SYSIBM')";
+
 			return dataConnection
 				.Query(rd =>
-				{
-					var schema = rd.ToString(0);
-					var name   = rd.ToString(1);
-
-					return new ProcedureInfo
 					{
-						ProcedureID   = dataConnection.Connection.Database + "." + schema + "." + name,
-						CatalogName   = dataConnection.Connection.Database,
-						SchemaName    = schema,
-						ProcedureName = name,
-					};
-				},@"
-					SELECT
-						PROCSCHEMA,
-						PROCNAME
-					FROM
-						SYSCAT.PROCEDURES
-					WHERE
-						" + GetSchemaFilter("PROCSCHEMA"))
-				.Where(p => IncludedSchemas.Length != 0 || ExcludedSchemas.Length != 0 || p.SchemaName == CurrenSchema)
+						var schema = rd.ToString(0);
+						var name   = rd.ToString(1);
+
+						return new ProcedureInfo
+						{
+							ProcedureID   = dataConnection.Connection.Database + "." + schema + "." + name,
+							CatalogName   = dataConnection.Connection.Database,
+							SchemaName    = schema,
+							ProcedureName = name,
+						};
+					},
+					sql)
+				.Where(p => IncludedSchemas.Count != 0 || ExcludedSchemas.Count != 0 || p.SchemaName == CurrenSchema)
 				.ToList();
 		}
 
@@ -444,19 +455,19 @@ namespace LinqToDB.DataProvider.DB2
 
 		protected string GetSchemaFilter(string schemaNameField)
 		{
-			if (IncludedSchemas.Length != 0 || ExcludedSchemas.Length != 0)
+			if (IncludedSchemas.Count != 0 || ExcludedSchemas.Count != 0)
 			{
 				var sql = schemaNameField;
 
-				if (IncludedSchemas.Length != 0)
+				if (IncludedSchemas.Count != 0)
 				{
 					sql += string.Format(" IN ({0})", IncludedSchemas.Select(n => '\'' + n + '\'') .Aggregate((s1,s2) => s1 + ',' + s2));
 
-					if (ExcludedSchemas.Length != 0)
+					if (ExcludedSchemas.Count != 0)
 						sql += " AND " + schemaNameField;
 				}
 
-				if (ExcludedSchemas.Length != 0)
+				if (ExcludedSchemas.Count != 0)
 					sql += string.Format(" NOT IN ({0})", ExcludedSchemas.Select(n => '\'' + n + '\'') .Aggregate((s1,s2) => s1 + ',' + s2));
 
 				return sql;

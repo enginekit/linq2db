@@ -37,6 +37,9 @@ namespace LinqToDB.SqlProvider
 					SqlProviderFlags.IsApplyJoinSupported,
 					SqlProviderFlags.IsGroupByExpressionSupported);
 
+			if (Common.Configuration.Linq.OptimizeJoins)
+				selectQuery = OptimizeJoins(selectQuery);
+
 			return selectQuery;
 		}
 
@@ -130,7 +133,7 @@ namespace LinqToDB.SqlProvider
 					{
 						var cond = subQuery.Where.SearchCondition.Conditions[j];
 
-						if (new QueryVisitor().Find(cond, checkTable) == null)
+						if (QueryVisitor.Find(cond, checkTable) == null)
 							continue;
 
 						var replaced = new Dictionary<IQueryElement,IQueryElement>();
@@ -245,7 +248,7 @@ namespace LinqToDB.SqlProvider
 								levelTables.Add((ISqlTableSource)e);
 						});
 
-						if (SqlProviderFlags.IsSubQueryColumnSupported && new QueryVisitor().Find(subQuery, checkTable) == null)
+						if (SqlProviderFlags.IsSubQueryColumnSupported && QueryVisitor.Find(subQuery, checkTable) == null)
 							continue;
 
 						var join = SelectQuery.LeftJoin(subQuery);
@@ -296,12 +299,12 @@ namespace LinqToDB.SqlProvider
 						{
 							var cond = subQuery.Where.SearchCondition.Conditions[j];
 
-							if (new QueryVisitor().Find(cond, checkTable) == null)
+							if (QueryVisitor.Find(cond, checkTable) == null)
 								continue;
 
 							var replaced = new Dictionary<IQueryElement,IQueryElement>();
 
-							var nc = new QueryVisitor().Convert(cond, delegate(IQueryElement e)
+							var nc = new QueryVisitor().Convert(cond, e =>
 							{
 								var ne = e;
 
@@ -352,13 +355,14 @@ namespace LinqToDB.SqlProvider
 
 						if (modified || isAggregated)
 						{
+							SelectQuery.Column newColumn;
 							if (isCount && !query.GroupBy.IsEmpty)
 							{
 								var oldFunc = (SqlFunction)subQuery.Select.Columns[0].Expression;
 
 								subQuery.Select.Columns.RemoveAt(0);
 
-								query.Select.Columns[i] = new SelectQuery.Column(
+								newColumn = new SelectQuery.Column(
 									query,
 									new SqlFunction(oldFunc.SystemType, oldFunc.Name, subQuery.Select.Columns[0]));
 							}
@@ -370,16 +374,16 @@ namespace LinqToDB.SqlProvider
 
 								var idx = subQuery.Select.Add(oldFunc.Parameters[0]);
 
-								query.Select.Columns[i] = new SelectQuery.Column(
+								newColumn = new SelectQuery.Column(
 									query,
 									new SqlFunction(oldFunc.SystemType, oldFunc.Name, subQuery.Select.Columns[idx]));
 							}
 							else
 							{
-								query.Select.Columns[i] = new SelectQuery.Column(query, subQuery.Select.Columns[0]);
+								newColumn = new SelectQuery.Column(query, subQuery.Select.Columns[0]);
 							}
 
-							dic.Add(col, query.Select.Columns[i]);
+							dic.Add(col, newColumn);
 						}
 					}
 				}
@@ -388,7 +392,10 @@ namespace LinqToDB.SqlProvider
 			selectQuery = new QueryVisitor().Convert(selectQuery, e =>
 			{
 				IQueryElement ne;
-				return dic.TryGetValue(e, out ne) ? ne : e;
+				if (dic.TryGetValue(e, out ne))
+					return ne;
+
+				return null;
 			});
 
 			return selectQuery;
@@ -783,17 +790,46 @@ namespace LinqToDB.SqlProvider
 					{
 						var expr = (SelectQuery.Predicate.ExprExpr)predicate;
 
-						if (expr.Expr1 is SqlField && expr.Expr2 is SqlParameter)
+						//if (expr.Expr1 is SqlField && expr.Expr2 is SqlParameter)
+						//{
+						//	if (((SqlParameter)expr.Expr2).DataType == DataType.Undefined)
+						//		((SqlParameter)expr.Expr2).DataType = ((SqlField)expr.Expr1).DataType;
+						//}
+						//else if (expr.Expr2 is SqlField && expr.Expr1 is SqlParameter)
+						//{
+						//	if (((SqlParameter)expr.Expr1).DataType == DataType.Undefined)
+						//		((SqlParameter)expr.Expr1).DataType = ((SqlField)expr.Expr2).DataType;
+						//}
+						var parameterExpr2 = expr.Expr2 as SqlParameter;
+						if (parameterExpr2 != null && parameterExpr2.DataType == DataType.Undefined)
 						{
-							if (((SqlParameter)expr.Expr2).DataType == DataType.Undefined)
-								((SqlParameter)expr.Expr2).DataType = ((SqlField)expr.Expr1).DataType;
-						}
-						else if (expr.Expr2 is SqlField && expr.Expr1 is SqlParameter)
-						{
-							if (((SqlParameter)expr.Expr1).DataType == DataType.Undefined)
-								((SqlParameter)expr.Expr1).DataType = ((SqlField)expr.Expr2).DataType;
+							var innerExpr = expr.Expr1;
+							while (innerExpr != null && innerExpr is SelectQuery.Column)
+							{
+								innerExpr = ((SelectQuery.Column)innerExpr).Expression;
+							}
+							if (innerExpr != null && innerExpr is SqlField)
+							{
+								parameterExpr2.DataType = ((SqlField) innerExpr).DataType;
+							}
 						}
 
+						var parameterExpr1 = expr.Expr1 as SqlParameter;
+						if (parameterExpr1 != null && parameterExpr1.DataType == DataType.Undefined)
+						{
+							var innerExpr = expr.Expr2;
+							while (innerExpr != null && innerExpr is SelectQuery.Column)
+							{
+								innerExpr = ((SelectQuery.Column)innerExpr).Expression;
+							}
+
+							if (innerExpr != null && innerExpr is SqlField)
+							{
+								parameterExpr1.DataType = ((SqlField)innerExpr).DataType;
+							}
+						}
+
+						
 						if (expr.Operator == SelectQuery.Predicate.Operator.Equal && expr.Expr1 is SqlValue && expr.Expr2 is SqlValue)
 						{
 							var value = Equals(((SqlValue)expr.Expr1).Value, ((SqlValue)expr.Expr2).Value);
@@ -1091,17 +1127,7 @@ namespace LinqToDB.SqlProvider
 			if (to.Type == typeof(object))
 				return func.Parameters[2];
 
-			if (to.Precision > 0)
-			{
-				var maxPrecision = GetMaxPrecision(from);
-				var maxScale     = GetMaxScale    (from);
-				var newPrecision = maxPrecision >= 0 ? Math.Min(to.Precision ?? 0, maxPrecision) : to.Precision;
-				var newScale     = maxScale     >= 0 ? Math.Min(to.Scale     ?? 0, maxScale)     : to.Scale;
-
-				if (to.Precision != newPrecision || to.Scale != newScale)
-					to = new SqlDataType(to.DataType, to.Type, null, newPrecision, newScale);
-			}
-			else if (to.Length > 0)
+			if (to.Length > 0)
 			{
 				var maxLength = to.Type == typeof(string) ? GetMaxDisplaySize(from) : GetMaxLength(from);
 				var newLength = maxLength >= 0 ? Math.Min(to.Length ?? 0, maxLength) : to.Length;
@@ -1230,8 +1256,8 @@ namespace LinqToDB.SqlProvider
 					var table = selectQuery.Update.Table ?? (SqlTable)selectQuery.From.Tables[0].Source;
 
 					if (selectQuery.Update.Table != null)
-						if (new QueryVisitor().Find(selectQuery.From, t => t == table) == null)
-							table = (SqlTable)new QueryVisitor().Find(selectQuery.From,
+						if (QueryVisitor.Find(selectQuery.From, t => t == table) == null)
+							table = (SqlTable)QueryVisitor.Find(selectQuery.From,
 								ex => ex is SqlTable && ((SqlTable)ex).ObjectType == table.ObjectType) ?? table;
 
 					var copy = new SqlTable(table);
@@ -1390,6 +1416,16 @@ namespace LinqToDB.SqlProvider
 		public ISqlExpression Div(ISqlExpression expr1, int value)
 		{
 			return Div<int>(expr1, new SqlValue(value));
+		}
+
+		#endregion
+
+		#region Optimizing Joins
+
+		public SelectQuery OptimizeJoins(SelectQuery selectQuery)
+		{
+			var optimizer = new JoinOptimizer();
+			return optimizer.OptimizeJoins(selectQuery);
 		}
 
 		#endregion

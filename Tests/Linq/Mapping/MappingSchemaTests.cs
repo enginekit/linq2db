@@ -2,7 +2,9 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Linq;
 
+using LinqToDB;
 using LinqToDB.Common;
 using LinqToDB.Expressions;
 using LinqToDB.Mapping;
@@ -86,8 +88,13 @@ namespace Tests.Mapping
 
 			Convert<DateTime,string>.Lambda = d => d.ToString(DateTimeFormatInfo.InvariantInfo);
 
-			ms1.SetConverter<DateTime,string>(d => d.ToString(new CultureInfo("en-US", false).DateTimeFormat));
-			ms2.SetConverter<DateTime,string>(d => d.ToString(new CultureInfo("ru-RU", false).DateTimeFormat));
+#if !NETSTANDARD
+			ms1.SetConverter<DateTime,string>(d => d.ToString("M\\/d\\/yyyy h:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture));
+			ms2.SetConverter<DateTime,string>(d => d.ToString("dd.MM.yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture));
+#else
+			ms1.SetConverter<DateTime,string>(d => d.ToString("M\\/d\\/yyyy h:mm:ss tt"));
+			ms2.SetConverter<DateTime,string>(d => d.ToString("dd.MM.yyyy HH:mm:ss"));
+#endif
 
 			{
 				var c0 = Convert<DateTime,string>.Lambda;
@@ -101,8 +108,13 @@ namespace Tests.Mapping
 
 			Convert<string,DateTime>.Expression = s => DateTime.Parse(s, DateTimeFormatInfo.InvariantInfo);
 
+#if !NETSTANDARD
 			ms1.SetConvertExpression<string,DateTime>(s => DateTime.Parse(s, new CultureInfo("en-US", false).DateTimeFormat));
 			ms2.SetConvertExpression<string,DateTime>(s => DateTime.Parse(s, new CultureInfo("ru-RU", false).DateTimeFormat));
+#else
+			ms1.SetConvertExpression<string,DateTime>(s => DateTime.Parse(s, new CultureInfo("en-US").DateTimeFormat));
+			ms2.SetConvertExpression<string,DateTime>(s => DateTime.Parse(s, new CultureInfo("ru-RU").DateTimeFormat));
+#endif
 
 			{
 				var c0 = Convert<string,DateTime>.Lambda;
@@ -177,18 +189,27 @@ namespace Tests.Mapping
 		{
 			var ms = new MappingSchema();
 
-			ms.SetCultureInfo(new CultureInfo("ru-RU", false));
+#if !NETSTANDARD
+			var ci = (CultureInfo)new CultureInfo("ru-RU", false).Clone();
+#else
+			var ci = (CultureInfo)new CultureInfo("ru-RU").Clone();
+#endif
+			ci.DateTimeFormat.FullDateTimePattern = "dd.MM.yyyy HH:mm:ss";
+			ci.DateTimeFormat.LongDatePattern = "dd.MM.yyyy";
+			ci.DateTimeFormat.ShortDatePattern = "dd.MM.yyyy";
+			ci.DateTimeFormat.LongTimePattern = "HH:mm:ss";
+			ci.DateTimeFormat.ShortTimePattern = "HH:mm:ss";
 
+			ms.SetCultureInfo(ci);
 			Assert.AreEqual("20.01.2012 16:30:40",                 ms.GetConverter<DateTime,string>()(new DateTime(2012, 1, 20, 16, 30, 40)));
 			Assert.AreEqual(new DateTime(2012, 1, 20, 16, 30, 40), ms.GetConverter<string,DateTime>()("20.01.2012 16:30:40"));
 			Assert.AreEqual("100000,999",                          ms.GetConverter<decimal,string> ()(100000.999m));
 			Assert.AreEqual(100000.999m,                           ms.GetConverter<string,decimal> ()("100000,999"));
-			Assert.AreEqual(100000.999m,                           ConvertTo<decimal>.From("100000.999"));
+			//Assert.AreEqual(100000.999m,                           ConvertTo<decimal>.From("100000.999")); this will fail if System Locale is ru-RU
 			Assert.AreEqual("100000,999",                          ms.GetConverter<double,string>  ()(100000.999));
 			Assert.AreEqual(100000.999,                            ms.GetConverter<string,double>  ()("100000,999"));
 		}
 
-#pragma warning disable 649
 
 		class AttrTest
 		{
@@ -204,6 +225,7 @@ namespace Tests.Mapping
 			var ms = new MappingSchema("2");
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -218,6 +240,7 @@ namespace Tests.Mapping
 			var ms = new MappingSchema("2", new MappingSchema("3"));
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -233,6 +256,7 @@ namespace Tests.Mapping
 			var ms = new MappingSchema("3", new MappingSchema("2"));
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -246,6 +270,7 @@ namespace Tests.Mapping
 		public void AttributeTest4()
 		{
 			var attrs = MappingSchema.Default.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1));
 
 			Assert.That(attrs.Length, Is.EqualTo(3));
@@ -255,6 +280,7 @@ namespace Tests.Mapping
 		public void AttributeTest5()
 		{
 			var attrs = MappingSchema.Default.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -285,6 +311,7 @@ namespace Tests.Mapping
 				});
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -308,6 +335,7 @@ namespace Tests.Mapping
 			};
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -327,6 +355,7 @@ namespace Tests.Mapping
 			};
 
 			var attrs = ms.GetAttributes<MapValueAttribute>(
+				typeof(AttrTest),
 				MemberHelper.FieldOf<AttrTest>(a => a.Field1),
 				a => a.Configuration);
 
@@ -366,6 +395,34 @@ namespace Tests.Mapping
 			Assert.That(mapType, Is.EqualTo(typeof(int?)));
 			var convertedValue = Converter.ChangeType(null, mapType, schema);
 			Assert.IsNull(convertedValue);
+		}
+
+		public class PkTable
+		{
+			[PrimaryKey, Identity]
+			[DataType(DataType.DateTime)]
+			public int Id;
+		}
+
+		[Column("ParentId", "Parent.Id")]
+		public class FkTable
+		{
+			[PrimaryKey]
+			public int Id;
+
+			public PkTable Parent;
+		}
+
+		[Test]
+		public void DoNotUseComplexAttributes()
+		{
+			var ed = MappingSchema.Default.GetEntityDescriptor(typeof(FkTable));
+			var c  = ed.Columns.Single(_ => _.ColumnName == "ParentId");
+
+			Assert.False(c.IsPrimaryKey);
+			Assert.False(c.IsIdentity);
+			Assert.AreEqual(DataType.DateTime, c.DataType);
+
 		}
 	}
 }

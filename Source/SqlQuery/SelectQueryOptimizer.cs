@@ -243,9 +243,9 @@ namespace LinqToDB.SqlQuery
 						case QueryElementType.LikePredicate :
 							{
 								var expr = (SelectQuery.Predicate.Like)e;
-								if (dic.TryGetValue(expr.Expr1,  out ex)) expr.Expr1  = ex;
-								if (dic.TryGetValue(expr.Expr2,  out ex)) expr.Expr2  = ex;
-								if (dic.TryGetValue(expr.Escape, out ex)) expr.Escape = ex;
+								if (                       dic.TryGetValue(expr.Expr1,  out ex)) expr.Expr1  = ex;
+								if (                       dic.TryGetValue(expr.Expr2,  out ex)) expr.Expr2  = ex;
+								if (expr.Escape != null && dic.TryGetValue(expr.Escape, out ex)) expr.Escape = ex;
 								break;
 							}
 
@@ -319,6 +319,28 @@ namespace LinqToDB.SqlQuery
 
 		void OptimizeUnions()
 		{
+			var isAllUnion = QueryVisitor.Find(_selectQuery,
+				ne =>
+				{
+					var nu = ne as SelectQuery.Union;
+					if (nu != null && nu.IsAll == true)
+						return true;
+
+					return false;
+				});
+			var isNotAllUnion = QueryVisitor.Find(_selectQuery,
+				ne =>
+				{
+					var nu = ne as SelectQuery.Union;
+					if (nu != null && nu.IsAll == false)
+						return true;
+
+					return false;
+				});
+
+			if (isNotAllUnion != null && isAllUnion != null)
+				return;
+
 			var exprs = new Dictionary<ISqlExpression,ISqlExpression>();
 
 			new QueryVisitor().Visit(_selectQuery, e =>
@@ -542,6 +564,16 @@ namespace LinqToDB.SqlQuery
 				{
 					var sc = (SelectQuery.SearchCondition)cond.Predicate;
 					OptimizeSearchCondition(sc);
+					if (sc.Conditions.Count == 0)
+					{
+						if (cond.IsOr)
+						{
+							searchCondition.Conditions.Clear();
+							break;
+						}
+						searchCondition.Conditions.RemoveAt(i);
+						--i;
+					}
 				}
 			}
 		}
@@ -673,9 +705,83 @@ namespace LinqToDB.SqlQuery
 				}
 			}
 
-			return source.Source is SelectQuery ?
-				RemoveSubQuery(source, optimizeWhere, allColumns && !isApplySupported, optimizeValues, optimizeColumns) :
-				source;
+			var select = source.Source as SelectQuery;
+			if (select != null)
+			{
+				var canRemove = !CorrectCrossJoinQuery(select);
+				if (canRemove)
+					return RemoveSubQuery(source, optimizeWhere, allColumns && !isApplySupported, optimizeValues, optimizeColumns);
+			}
+
+			return source;
+		}
+
+		bool CorrectCrossJoinQuery(SelectQuery query)
+		{
+			var select = query.Select;
+			if (select.From.Tables.Count == 1)
+				return false;
+
+			var joins = select.From.Tables.SelectMany(_ => _.Joins).Distinct().ToArray();
+			if (joins.Length == 0)
+				return false;
+
+			var tables = select.From.Tables.ToArray();
+			foreach (var t in tables)
+				t.Joins.Clear();
+
+			var baseTable = tables[0];
+
+			if (_flags.IsCrossJoinSupported || _flags.IsInnerJoinAsCrossSupported)
+			{
+				select.From.Tables.Clear();
+				select.From.Tables.Add(baseTable);
+
+				foreach (var t in tables.Skip(1))
+				{
+					baseTable.Joins.Add(new SelectQuery.JoinedTable(SelectQuery.JoinType.Inner, t, false));
+				}
+
+				foreach (var j in joins)
+					baseTable.Joins.Add(j);
+			}
+			else
+			{
+				// move to subquery
+				var subQuery = new SelectQuery();
+
+				subQuery.Select.From.Tables.AddRange(tables);
+
+				baseTable = new SelectQuery.TableSource(subQuery, "cross");
+				baseTable.Joins.AddRange(joins);
+
+				query.Select.From.Tables.Clear();
+
+				var sources = new HashSet<ISqlTableSource>(tables.Select(t => t.Source));
+				var foundFields = new HashSet<ISqlExpression>();
+
+				QueryHelper.CollectDependencies(query.RootQuery(), sources, foundFields);
+				QueryHelper.CollectDependencies(baseTable,         sources, foundFields);
+
+				var toReplace = foundFields.ToDictionary(f => f,
+					f => subQuery.Select.Columns[subQuery.Select.Add(f)] as ISqlExpression);
+
+				Func<ISqlExpression, ISqlExpression> transformFunc = e =>
+				{
+					ISqlExpression newValue;
+					return toReplace.TryGetValue(e, out newValue) ? newValue : e;
+				};
+
+				((ISqlExpressionWalkable) query.RootQuery()).Walk(false, transformFunc);
+				foreach (var j in joins)
+				{
+					((ISqlExpressionWalkable) j).Walk(false, transformFunc);
+				}
+
+				query.Select.From.Tables.Add(baseTable);
+			}
+
+			return true;
 		}
 
 		static bool CheckColumn(SelectQuery.Column column, ISqlExpression expr, SelectQuery query, bool optimizeValues, bool optimizeColumns)
@@ -702,7 +808,7 @@ namespace LinqToDB.SqlQuery
 			var visitor = new QueryVisitor();
 
 			if (optimizeColumns &&
-				visitor.Find(expr, e => e is SelectQuery || IsAggregationFunction(e)) == null)
+				QueryVisitor.Find(expr, e => e is SelectQuery || IsAggregationFunction(e)) == null)
 			{
 				var n = 0;
 				var q = query.ParentSelect ?? query;
@@ -793,15 +899,25 @@ namespace LinqToDB.SqlQuery
 
 		static bool IsAggregationFunction(IQueryElement expr)
 		{
-			if (expr is SqlFunction)
-				switch (((SqlFunction)expr).Name)
+			var func = expr as SqlFunction;
+			if (func != null)
+			{ 
+				switch (func.Name)
 				{
 					case "Count"   :
 					case "Average" :
 					case "Min"     :
 					case "Max"     :
 					case "Sum"     : return true;
+					default        : return false;
 				}
+			}
+
+			var sqlExpr = expr as SqlExpression;
+			if (sqlExpr != null)
+			{
+				return sqlExpr.SqlFlags.HasFlag(SqlFlags.Aggregate);
+			}
 
 			return false;
 		}
@@ -822,7 +938,7 @@ namespace LinqToDB.SqlQuery
 				var sql   = (SelectQuery)joinSource.Source;
 				var isAgg = sql.Select.Columns.Any(c => IsAggregationFunction(c.Expression));
 
-				if (isApplySupported && (isAgg || sql.Select.TakeValue != null || sql.Select.SkipValue != null))
+				if (isApplySupported && (isAgg || sql.Select.HasModifier))
 					return;
 
 				var searchCondition = new List<SelectQuery.Condition>(sql.Where.SearchCondition.Conditions);
@@ -831,6 +947,10 @@ namespace LinqToDB.SqlQuery
 
 				if (!ContainsTable(tableSource.Source, sql))
 				{
+					if (!(joinTable.JoinType == SelectQuery.JoinType.CrossApply && searchCondition.Count == 0) // CROSS JOIN
+						&& sql.Select.HasModifier)
+						throw new LinqToDBException("Database do not support CROSS/OUTER APPLY join required by the query.");
+
 					joinTable.JoinType = joinTable.JoinType == SelectQuery.JoinType.CrossApply ? SelectQuery.JoinType.Inner : SelectQuery.JoinType.Left;
 					joinTable.Condition.Conditions.AddRange(searchCondition);
 				}
@@ -869,7 +989,7 @@ namespace LinqToDB.SqlQuery
 
 		static bool ContainsTable(ISqlTableSource table, IQueryElement sql)
 		{
-			return null != new QueryVisitor().Find(sql, e =>
+			return null != QueryVisitor.Find(sql, e =>
 				e == table ||
 				e.ElementType == QueryElementType.SqlField && table == ((SqlField)e).Table ||
 				e.ElementType == QueryElementType.Column   && table == ((SelectQuery.Column)  e).Parent);
@@ -908,6 +1028,8 @@ namespace LinqToDB.SqlQuery
 
 		void OptimizeSubQueries(bool isApplySupported, bool optimizeColumns)
 		{
+			CorrectCrossJoinQuery(_selectQuery);
+
 			for (var i = 0; i < _selectQuery.From.Tables.Count; i++)
 			{
 				var table = OptimizeSubQuery(_selectQuery.From.Tables[i], true, false, isApplySupported, true, optimizeColumns);

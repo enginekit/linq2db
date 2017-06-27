@@ -3,6 +3,8 @@ using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Data;
+using LinqToDB.DataProvider.SqlServer;
+using LinqToDB.Linq;
 using LinqToDB.Mapping;
 using NUnit.Framework;
 
@@ -13,11 +15,12 @@ using NUnit.Framework;
 namespace Tests.xUpdate
 {
 	using Model;
+	using System.Collections.Generic;
 
 	[TestFixture]
 	public class InsertTests : TestBase
 	{
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.PostgreSQL, ProviderName.SQLite, ProviderName.Access)]
+		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.PostgreSQL, ProviderName.SQLite, TestProvName.SQLiteMs, ProviderName.Access)]
 		public void DistinctInsert1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -48,7 +51,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.PostgreSQL, ProviderName.SQLite, ProviderName.Access)]
+		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.PostgreSQL, ProviderName.SQLite, TestProvName.SQLiteMs, ProviderName.Access)]
 		public void DistinctInsert2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -253,7 +256,7 @@ namespace Tests.xUpdate
 						db.Child
 							.Where(c => c.ChildID == 11)
 							.Into(db.Parent)
-								.Value(p => p.ParentID, c => c.ParentID)
+								.Value(p => p.ParentID, c => c.ParentID + 1000)
 								.Value(p => p.Value1,   c => (int?)c.ChildID)
 							.Insert());
 					Assert.AreEqual(1, db.Parent.Count(p => p.Value1 == 11));
@@ -460,7 +463,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource(TestProvName.SQLiteMs)]
 		public void InsertUnion1(string context)
 		{
 			Child.Count();
@@ -607,31 +610,23 @@ namespace Tests.xUpdate
 		public void InsertWithIdentity1(string context)
 		{
 			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
 			{
-				try
-				{
-					db.Person.Delete(p => p.ID > 2);
+				var id =
+					db.Person
+						.InsertWithIdentity(() => new Person
+						{
+							FirstName = "John",
+							LastName  = "Shepard",
+							Gender    = Gender.Male
+						});
 
-					var id =
-						db.Person
-							.InsertWithIdentity(() => new Person
-							{
-								FirstName = "John",
-								LastName  = "Shepard",
-								Gender    = Gender.Male
-							});
+				Assert.NotNull(id);
 
-					Assert.NotNull(id);
+				var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
 
-					var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
-
-					Assert.NotNull (john);
-					Assert.AreEqual(id, john.ID);
-				}
-				finally
-				{
-					db.Person.Delete(p => p.ID > 2);
-				}
+				Assert.NotNull (john);
+				Assert.AreEqual(id, john.ID);
 			}
 		}
 
@@ -639,29 +634,21 @@ namespace Tests.xUpdate
 		public void InsertWithIdentity2(string context)
 		{
 			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
 			{
-				try
-				{
-					db.Person.Delete(p => p.ID > 2);
+				var id = db
+					.Into(db.Person)
+						.Value(p => p.FirstName, () => "John")
+						.Value(p => p.LastName,  () => "Shepard")
+						.Value(p => p.Gender,    () => Gender.Male)
+					.InsertWithIdentity();
 
-					var id = db
-						.Into(db.Person)
-							.Value(p => p.FirstName, () => "John")
-							.Value(p => p.LastName,  () => "Shepard")
-							.Value(p => p.Gender,    () => Gender.Male)
-						.InsertWithIdentity();
+				Assert.NotNull(id);
 
-					Assert.NotNull(id);
+				var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
 
-					var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
-
-					Assert.NotNull (john);
-					Assert.AreEqual(id, john.ID);
-				}
-				finally
-				{
-					db.Person.Delete(p => p.ID > 2);
-				}
+				Assert.NotNull (john);
+				Assert.AreEqual(id, john.ID);
 			}
 		}
 
@@ -669,29 +656,21 @@ namespace Tests.xUpdate
 		public void InsertWithIdentity3(string context)
 		{
 			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
 			{
-				try
-				{
-					db.Person.Delete(p => p.ID > 2);
+				var id = db
+					.Into(db.Person)
+						.Value(p => p.FirstName, "John")
+						.Value(p => p.LastName,  "Shepard")
+						.Value(p => p.Gender,    Gender.Male)
+					.InsertWithIdentity();
 
-					var id = db
-						.Into(db.Person)
-							.Value(p => p.FirstName, "John")
-							.Value(p => p.LastName,  "Shepard")
-							.Value(p => p.Gender,    Gender.Male)
-						.InsertWithIdentity();
+				Assert.NotNull(id);
 
-					Assert.NotNull(id);
+				var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
 
-					var john = db.Person.Single(p => p.FirstName == "John" && p.LastName == "Shepard");
-
-					Assert.NotNull (john);
-					Assert.AreEqual(id, john.ID);
-				}
-				finally
-				{
-					db.Person.Delete(p => p.ID > 2);
-				}
+				Assert.NotNull (john);
+				Assert.AreEqual(id, john.ID);
 			}
 		}
 
@@ -699,32 +678,25 @@ namespace Tests.xUpdate
 		public void InsertWithIdentity4(string context)
 		{
 			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
 			{
-				try
+				for (var i = 0; i < 2; i++)
 				{
-					for (var i = 0; i < 2; i++)
-					{
-						db.Person.Delete(p => p.ID > 2);
 
-						var id = db.InsertWithIdentity(
-							new Person
-							{
-								FirstName = "John" + i,
-								LastName  = "Shepard",
-								Gender    = Gender.Male
-							});
+					var id = db.InsertWithIdentity(
+						new Person
+						{
+							FirstName = "John" + i,
+							LastName  = "Shepard",
+							Gender    = Gender.Male
+						});
 
-						Assert.NotNull(id);
+					Assert.NotNull(id);
 
-						var john = db.Person.Single(p => p.FirstName == "John" + i && p.LastName == "Shepard");
+					var john = db.Person.Single(p => p.FirstName == "John" + i && p.LastName == "Shepard");
 
-						Assert.NotNull (john);
-						Assert.AreEqual(id, john.ID);
-					}
-				}
-				finally
-				{
-					db.Person.Delete(p => p.ID > 2);
+					Assert.NotNull (john);
+					Assert.AreEqual(id, john.ID);
 				}
 			}
 		}
@@ -733,13 +705,77 @@ namespace Tests.xUpdate
 		public void InsertWithIdentity5(string context)
 		{
 			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
+			{
+				for (var i = 0; i < 2; i++)
+				{
+					var person = new Person
+					{
+						FirstName = "John" + i,
+						LastName  = "Shepard",
+						Gender    = Gender.Male
+					};
+
+					var id = db.InsertWithIdentity(person);
+
+					Assert.NotNull(id);
+
+					var john = db.Person.Single(p => p.FirstName == "John" + i && p.LastName == "Shepard");
+
+					Assert.NotNull (john);
+					Assert.AreEqual(id, john.ID);
+				}
+			}
+		}
+
+		class GuidID
+		{
+			[Identity] public Guid ID;
+			           public int  Field1;
+		}
+
+		[Test, IncludeDataContextSource(
+			ProviderName.SqlServer2005, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void InsertWithGuidIdentity(string context)
+		{
+			using (var db = new DataConnection(context))
+			{
+				var id = (Guid)db.InsertWithIdentity(new GuidID { Field1 = 1 });
+				Assert.AreNotEqual(Guid.Empty, id);
+			}
+		}
+
+		[Test, IncludeDataContextSource(
+			ProviderName.SqlServer2005, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void InsertWithGuidIdentityOutput(string context)
+		{
+			try
+			{
+				SqlServerConfiguration.GenerateScopeIdentity = false;
+				using (var db = new DataConnection(context))
+				{
+					var id = (Guid) db.InsertWithIdentity(new GuidID {Field1 = 1});
+					Assert.AreNotEqual(Guid.Empty, id);
+				}
+			}
+			finally
+			{
+				SqlServerConfiguration.GenerateScopeIdentity = true;
+			}
+		}
+
+		[Test, IncludeDataContextSource(
+			ProviderName.SqlServer2005, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void InsertWithIdentityOutput(string context)
+		{
+			using (var db = GetDataContext(context))
+			using (new DeletePerson(db))
 			{
 				try
 				{
+					SqlServerConfiguration.GenerateScopeIdentity = false;
 					for (var i = 0; i < 2; i++)
 					{
-						db.Person.Delete(p => p.ID > 2);
-
 						var person = new Person
 						{
 							FirstName = "John" + i,
@@ -753,38 +789,20 @@ namespace Tests.xUpdate
 
 						var john = db.Person.Single(p => p.FirstName == "John" + i && p.LastName == "Shepard");
 
-						Assert.NotNull (john);
+						Assert.NotNull(john);
 						Assert.AreEqual(id, john.ID);
 					}
 				}
 				finally
 				{
-					db.Person.Delete(p => p.ID > 2);
+					SqlServerConfiguration.GenerateScopeIdentity = true;
 				}
-			}
-		}
-
-		class GuidID
-		{
-			[Identity]
-			public Guid ID;
-			public int  Field1;
-		}
-
-		[Test, IncludeDataContextSource(
-			ProviderName.SqlServer2005, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
-		public void InsertWithGuidIdentity(string context)
-		{
-			using (var db = new DataConnection(context))
-			{
-				var id = (Guid)db.InsertWithIdentity(new GuidID { Field1 = 1 });
 			}
 		}
 
 		class GuidID2
 		{
-			[Identity]
-			public Guid ID;
+			[Identity] public Guid ID;
 		}
 
 		[Test, IncludeDataContextSource(
@@ -837,6 +855,76 @@ namespace Tests.xUpdate
 			}
 		}
 
+		[DataContextSource]
+		public void InsertOrUpdate2(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				int id;
+				using (new DisableLogging())
+					id = Convert.ToInt32(db.Person.InsertWithIdentity(() => new Person
+					{
+						FirstName = "test",
+						LastName  = "subject",
+						Gender    = Gender.Unknown
+					}));
+
+				try
+				{
+					var records = db.Patient.InsertOrUpdate(
+						() => new Patient()
+						{
+							PersonID  = id,
+							Diagnosis = "negative"
+						},
+						p => new Patient()
+						{
+						});
+
+					try
+					{
+						List<Patient> patients;
+
+						using (new DisableLogging())
+							patients = db.Patient.Where(p => p.PersonID == id).ToList();
+
+						Assert.AreEqual(1, records);
+						Assert.AreEqual(1, patients.Count);
+						Assert.AreEqual(id, patients[0].PersonID);
+						Assert.AreEqual("negative", patients[0].Diagnosis);
+
+						records = db.Patient.InsertOrUpdate(
+							() => new Patient()
+							{
+								PersonID  = id,
+								Diagnosis = "positive"
+							},
+							p => new Patient()
+							{
+							});
+
+						using (new DisableLogging())
+							patients = db.Patient.Where(p => p.PersonID == id).ToList();
+
+						Assert.LessOrEqual(records, 0);
+						Assert.AreEqual(1, patients.Count);
+						Assert.AreEqual(id, patients[0].PersonID);
+						Assert.AreEqual("negative", patients[0].Diagnosis);
+					}
+					finally
+					{
+						using (new DisableLogging())
+							db.Patient.Delete(p => p.PersonID == id);
+					}
+				}
+				finally
+				{
+					using (new DisableLogging())
+						db.Person.Delete(p => p.ID == id);
+				}
+			}
+		}
+
 		[Test, DataContextSource]
 		public void InsertOrReplace1(string context)
 		{
@@ -870,6 +958,24 @@ namespace Tests.xUpdate
 					db.Person. Delete(p => p.ID       == id);
 				}
 			}
+		}
+
+		[Test]
+		public void InsertOrReplaceWithIdentity()
+		{
+			Assert.Throws<LinqException>(() =>
+			{
+				using (var db = new TestDataConnection())
+				{
+					var p = new Person()
+					{
+						FirstName = Guid.NewGuid().ToString(),
+						ID = 1000,
+					};
+
+					db.InsertOrReplace(p);
+				}
+			});
 		}
 
 		[Test, DataContextSource]
@@ -943,7 +1049,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void InsertBatch2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -1068,6 +1174,35 @@ namespace Tests.xUpdate
 				finally
 				{
 					db.Person.Delete(p => p.FirstName.StartsWith("Insert14"));
+				}
+			}
+		}
+
+		[Test, DataContextSource]
+		public void Insert15(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Person.Where(_ => _.FirstName.StartsWith("Insert15")).Delete();
+
+				try
+				{
+					db.Insert(new ComplexPerson
+						{
+							Name = new FullName
+							{
+								FirstName = "Insert15",
+								LastName  = "Insert15"
+							},
+							Gender = Gender.Male,
+						});
+
+					var cnt = db.Person.Where(_ => _.FirstName.StartsWith("Insert15")).Count();
+					Assert.AreEqual(1, cnt);
+				}
+				finally
+				{
+					db.Person.Where(_ => _.FirstName.StartsWith("Insert15")).Delete();
 				}
 			}
 		}

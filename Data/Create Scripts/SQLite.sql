@@ -1,10 +1,26 @@
---
+﻿--
 -- Helper table
 --
 DROP TABLE IF EXISTS Dual;
 CREATE TABLE Dual (Dummy  VARCHAR(10));
 INSERT INTO  Dual (Dummy) VALUES ('X');
 
+DROP TABLE IF EXISTS InheritanceParent;
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId integer      NOT NULL CONSTRAINT PK_InheritanceParent,
+	TypeDiscriminator   integer          NULL,
+	Name                nvarchar(50)     NULL
+);
+
+DROP TABLE IF EXISTS InheritanceChild;
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  integer      NOT NULL CONSTRAINT PK_InheritanceChild,
+	InheritanceParentId integer      NOT NULL,
+	TypeDiscriminator   integer          NULL,
+	Name                nvarchar(50)     NULL
+);
 --
 -- Person Table
 --
@@ -20,6 +36,8 @@ CREATE TABLE Person
 
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    'M');
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M');
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F');
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M');
 
 --
 -- Doctor Table Extension
@@ -41,7 +59,9 @@ DROP TABLE IF EXISTS Patient;
 CREATE TABLE Patient
 (
 	PersonID  integer       NOT NULL CONSTRAINT PK_Patient PRIMARY KEY,
-	Diagnosis nvarchar(256) NOT NULL
+	Diagnosis nvarchar(256) NOT NULL,
+
+	CONSTRAINT FK_Patient_Person FOREIGN KEY(PersonID) REFERENCES Person(PersonID)
 );
 INSERT INTO Patient (PersonID, Diagnosis) VALUES (2, 'Hallucination with Paranoid Bugs'' Delirium of Persecution');
 
@@ -68,7 +88,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    binary(5000) NULL,
 	SmallIntValue  smallint,
 	IntValue       int          NULL,
-	BigIntValue    bigint       NULL
+	BigIntValue    bigint       NULL,
+	StringValue    nvarchar(50) NULL
 );
 
 
@@ -101,6 +122,7 @@ CREATE TABLE AllTypes
 	datetimeDataType         datetime         NULL,
 
 	charDataType             char(1)          NULL,
+	char20DataType           char(20)         NULL,
 	varcharDataType          varchar(20)      NULL,
 	textDataType             text             NULL,
 	ncharDataType            nchar(20)        NULL,

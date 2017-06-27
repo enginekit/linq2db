@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -32,7 +33,7 @@
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <NuGetPackageImportStamp>6acd2a44</NuGetPackageImportStamp>
+    <NuGetPackageImportStamp>37a15dcc</NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -44,8 +45,7 @@
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <NoWarn>
-    </NoWarn>
+    <NoWarn>649 429</NoWarn>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -79,7 +79,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'DebugMono|AnyCPU'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\DebugMono\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;FW4</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;FW4;MONO;NOFSHARP</DefineConstants>
     <DebugType>full</DebugType>
     <PlatformTarget>x86</PlatformTarget>
     <CodeAnalysisLogFile>bin\Debug\UnitTests.Linq.dll.CodeAnalysisLog.xml</CodeAnalysisLogFile>
@@ -97,10 +97,10 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'ReleaseMono|AnyCPU'">
     <OutputPath>bin\ReleaseMono\</OutputPath>
-    <DefineConstants>TRACE;FW4</DefineConstants>
+    <DefineConstants>TRACE;FW4;MONO;NOFSHARP</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x86</PlatformTarget>
     <CodeAnalysisLogFile>bin\Release\UnitTests.Linq.dll.CodeAnalysisLog.xml</CodeAnalysisLogFile>
     <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
     <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
@@ -126,8 +126,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Accessibility" />
-    <Reference Include="FirebirdSql.Data.FirebirdClient, Version=4.10.0.0, Culture=neutral, PublicKeyToken=3750abcc3150b00c, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\FirebirdSql.Data.FirebirdClient.4.10.0.0\lib\net45\FirebirdSql.Data.FirebirdClient.dll</HintPath>
+    <Reference Include="FirebirdSql.Data.FirebirdClient, Version=5.8.1.0, Culture=neutral, PublicKeyToken=3750abcc3150b00c, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\FirebirdSql.Data.FirebirdClient.5.8.1\lib\net40-client\FirebirdSql.Data.FirebirdClient.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="IBM.Data.DB2, Version=9.7.4.4, Culture=neutral, PublicKeyToken=7c307b91aa13d208, processorArchitecture=x86">
@@ -141,24 +141,28 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Microsoft.SqlServer.Types, Version=11.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91, processorArchitecture=MSIL">
+    <Reference Include="Microsoft.SqlServer.Types, Version=14.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\Microsoft.SqlServer.Types.14.0.314.76\lib\net40\Microsoft.SqlServer.Types.dll</HintPath>
       <Private>True</Private>
-      <HintPath>..\..\packages\Microsoft.SqlServer.Types.11.0.2\lib\net20\Microsoft.SqlServer.Types.dll</HintPath>
     </Reference>
     <Reference Include="MiniProfiler, Version=3.2.0.157, Culture=neutral, PublicKeyToken=b44f9351044011a3, processorArchitecture=MSIL">
       <HintPath>..\..\packages\MiniProfiler.3.2.0.157\lib\net40\MiniProfiler.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="MySql.Data, Version=6.9.8.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\MySql.Data.6.9.8\lib\net45\MySql.Data.dll</HintPath>
+    <Reference Include="MySql.Data, Version=6.9.9.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\MySql.Data.6.9.9\lib\net45\MySql.Data.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Npgsql, Version=3.0.6.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\Npgsql.3.0.6\lib\net45\Npgsql.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\Newtonsoft.Json.10.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="nunit.framework, Version=3.2.1.0, Culture=neutral, PublicKeyToken=2638cd05610744eb, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\NUnit.3.2.1\lib\net45\nunit.framework.dll</HintPath>
+    <Reference Include="Npgsql, Version=3.2.2.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\Npgsql.3.2.2\lib\net45\Npgsql.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="nunit.framework, Version=3.6.1.0, Culture=neutral, PublicKeyToken=2638cd05610744eb, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\NUnit.3.6.1\lib\net45\nunit.framework.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Oracle.DataAccess, Version=2.112.1.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=x86">
@@ -166,7 +170,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="Oracle.ManagedDataAccess, Version=4.121.2.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\Oracle.ManagedDataAccess.12.1.24160419\lib\net40\Oracle.ManagedDataAccess.dll</HintPath>
+      <HintPath>..\..\Packages\Oracle.ManagedDataAccess.12.1.24160719\lib\net40\Oracle.ManagedDataAccess.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Sap.Data.Hana.v4.5, Version=1.0.80.0, Culture=neutral, PublicKeyToken=0326b8ea63db4bc4, processorArchitecture=MSIL">
@@ -184,14 +188,12 @@
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Data.Linq">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Data.Services" />
-    <Reference Include="System.Data.SQLite, Version=1.0.101.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\System.Data.SQLite.Core.1.0.101.0\lib\net45\System.Data.SQLite.dll</HintPath>
+    <Reference Include="System.Data.SQLite, Version=1.0.105.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\System.Data.SQLite.Core.1.0.105.0\lib\net45\System.Data.SQLite.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Data.SqlServerCe, Version=4.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91, processorArchitecture=MSIL">
@@ -199,13 +201,15 @@
       <HintPath>..\..\packages\Microsoft.SqlServer.Compact.4.0.8876.1\lib\net40\System.Data.SqlServerCe.dll</HintPath>
     </Reference>
     <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.1.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\..\Packages\System.Threading.Tasks.Extensions.4.3.0\lib\portable-net45+win8+wp8+wpa81\System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Transactions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml.Linq">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Data.DataSetExtensions">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
@@ -218,10 +222,34 @@
       <Private>True</Private>
     </Reference>
   </ItemGroup>
+  <Choose>
+    <When Condition=" '$(Configuration)' != 'ReleaseMono' AND '$(Configuration)' != 'DebugMono' ">
+      <ItemGroup Condition=" '$(Configuration)' != 'ReleaseMono' AND '$(Configuration)' != 'DebugMono' ">
+        <ProjectReference Include="..\FSharp\Tests.FSharp.fsproj">
+          <Project>{56109866-4005-4852-9f9a-19a7a8d3b369}</Project>
+          <Name>Tests.FSharp</Name>
+        </ProjectReference>
+        <ProjectReference Include="..\VisualBasic\Tests.VisualBasic.vbproj">
+          <Project>{D11617AB-9F88-4C74-8ABD-F8580DB4B01B}</Project>
+          <Name>Tests.VisualBasic</Name>
+        </ProjectReference>
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <ItemGroup>
+        <Reference Include="Mono.Data.Sqlite">
+          <Private>True</Private>
+        </Reference>
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
   <ItemGroup>
     <Compile Include="Common\ChangeTypeTests.cs" />
     <Compile Include="Common\ConvertTests.cs" />
     <Compile Include="Common\DefaultValueTests.cs" />
+    <Compile Include="Common\ReservedWordTest.cs" />
+    <Compile Include="Common\ToolsTest.cs" />
+    <Compile Include="DataProvider\ALLTYPE.cs" />
     <Compile Include="DataProvider\SapHanaTests.cs" />
     <Compile Include="DataProvider\InformixTests.cs" />
     <Compile Include="DataProvider\DB2Tests.cs" />
@@ -231,9 +259,20 @@
     <Compile Include="DataProvider\PostgreSQLTests.cs" />
     <Compile Include="DataProvider\SqlServerTypesTests.cs" />
     <Compile Include="Data\MiniProfilerTests.cs" />
+    <Compile Include="Data\RetryPolicyTest.cs" />
     <Compile Include="Data\TransactionTests.cs" />
     <Compile Include="Data\ProcedureTests.cs" />
+    <Compile Include="Linq\AnalyticTests.cs" />
+    <Compile Include="Linq\GenericExtensionsTests.cs" />
     <Compile Include="Linq\InterfaceTests.cs" />
+    <Compile Include="Linq\JoinOptimizeTests.cs" />
+    <Compile Include="Linq\SqlExtensionTests.cs" />
+    <Compile Include="Linq\CharTypesTests.cs" />
+    <Compile Include="Samples\DataContextDecoratorTests.cs" />
+    <Compile Include="OrmBattle\Helper\ExpressionUtils.cs" />
+    <Compile Include="OrmBattle\Helper\GenericEqualityComparer.cs" />
+    <Compile Include="OrmBattle\OrmBattleTests.cs" />
+    <Compile Include="SqlServerTypes\Loader.cs" />
     <Compile Include="TestProvName.cs" />
     <Compile Include="Update\CreateTableTests.cs" />
     <Compile Include="Linq\QueryHintsTests.cs" />
@@ -248,6 +287,7 @@
     <Compile Include="Linq\AllAnyTests.cs" />
     <Compile Include="Linq\FSharpTests.cs" />
     <Compile Include="Mapping\FluentMappingTests.cs" />
+    <Compile Include="Samples\ConcurrencyCheckTests.cs" />
     <Compile Include="Samples\JoinOperatorTests.cs" />
     <Compile Include="SchemaProvider\SchemaProviderTests.cs" />
     <Compile Include="DataProvider\SybaseTests.cs" />
@@ -270,7 +310,6 @@
     <Compile Include="Security\TestHelpers\PartialTrustFixtureAttribute.cs" />
     <Compile Include="Security\TestHelpers\PartialTrustSandbox.cs" />
     <Compile Include="Security\PartialTrustTests.cs" />
-    <Compile Include="SqlServerTypes\Loader.cs" />
     <Compile Include="Update\BatchTests.cs" />
     <Compile Include="Linq\CommonTests.cs" />
     <Compile Include="Linq\ConvertTests.cs" />
@@ -319,6 +358,7 @@
     <Compile Include="Linq\GroupByTests.cs" />
     <Compile Include="Exceptions\JoinTests.cs" />
     <Compile Include="Linq\JoinTests.cs" />
+    <Compile Include="Linq\JoinToLimitedTests.cs" />
     <Compile Include="Linq\DateTimeFunctionsTests.cs" />
     <Compile Include="Linq\SelectManyTests.cs" />
     <Compile Include="Linq\StringFunctionTests.cs" />
@@ -333,54 +373,97 @@
     <Compile Include="UserTests\FirstOrDefaultNullReferenceExceptionTests.cs" />
     <Compile Include="UserTests\GenericsFilterTests.cs" />
     <Compile Include="UserTests\GroupBySubqueryTests.cs" />
+    <Compile Include="UserTests\Issue133Tests.cs" />
+    <Compile Include="UserTests\Issue192Tests.cs" />
+    <Compile Include="UserTests\Issue175Tests.cs" />
+    <Compile Include="UserTests\Issue228Tests.cs" />
+    <Compile Include="UserTests\Issue269Tests.cs" />
+    <Compile Include="UserTests\Issue271Tests.cs" />
+    <Compile Include="UserTests\Issue358Tests.cs" />
+    <Compile Include="UserTests\Issue356Tests.cs" />
+    <Compile Include="UserTests\Issue082Tests.cs" />
+    <Compile Include="UserTests\Issue737Tests.cs" />
+    <Compile Include="UserTests\Issue395Tests.cs" />
+    <Compile Include="UserTests\Issue273Tests.cs" />
+    <Compile Include="UserTests\Issue447Tests.cs" />
+    <Compile Include="UserTests\Issue445Tests.cs" />
+    <Compile Include="UserTests\Issue421.cs" />
+    <Compile Include="UserTests\Issue461Tests.cs" />
+    <Compile Include="UserTests\Issue241Tests.cs" />
+    <Compile Include="UserTests\Issue531Tests.cs" />
     <Compile Include="UserTests\Issue357Tests.cs" />
     <Compile Include="UserTests\Issue352Tests.cs" />
+    <Compile Include="UserTests\Issue475Tests.cs" />
+    <Compile Include="UserTests\Issue464Tests.cs" />
+    <Compile Include="UserTests\Issue488Tests.cs" />
+    <Compile Include="UserTests\Issue496Tests.cs" />
+    <Compile Include="UserTests\Issue513Tests.cs" />
+    <Compile Include="UserTests\Issue307Tests.cs" />
+    <Compile Include="UserTests\Issue533Tests.cs" />
+    <Compile Include="UserTests\Issue548Tests.cs" />
+    <Compile Include="UserTests\Issue569Tests.cs" />
+    <Compile Include="UserTests\Issue667Tests.cs" />
+    <Compile Include="UserTests\Issue708Tests.cs" />
     <Compile Include="UserTests\LetTests.cs" />
     <Compile Include="UserTests\MultiPartIdentifierTests.cs" />
     <Compile Include="UserTests\SelectManyDeleteTests.cs" />
     <Compile Include="UserTests\SelectManyUpdateTests.cs" />
+    <Compile Include="UserTests\SQLiteDateTime.cs" />
     <Compile Include="UserTests\UnknownSqlTests.cs" />
     <Compile Include="UserTests\UnnecessaryInnerJoinTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\Data\Create Scripts\Access.sql">
       <Link>Database\Create Scripts\Access.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\DB2.sql">
       <Link>Database\Create Scripts\DB2.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\Firebird.sql">
       <Link>Database\Create Scripts\Firebird.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\Informix.sql">
       <Link>Database\Create Scripts\Informix.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\MySql.sql">
       <Link>Database\Create Scripts\MySql.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\Oracle.sql">
       <Link>Database\Create Scripts\Oracle.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\PostgreSQL.sql">
       <Link>Database\Create Scripts\PostgreSQL.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\SapHana.sql">
       <Link>Database\Create Scripts\SapHana.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\SqlCe.sql">
       <Link>Database\Create Scripts\SqlCe.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\SQLite.sql">
       <Link>Database\Create Scripts\SQLite.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\SqlServer.sql">
       <Link>Database\Create Scripts\SqlServer.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\SqlServer2000.sql">
       <Link>Database\Create Scripts\SqlServer2000.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\Create Scripts\Sybase.sql">
       <Link>Database\Create Scripts\Sybase.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\Data\TestData.mdb">
       <Link>Database\TestData.mdb</Link>
@@ -390,25 +473,35 @@
       <Link>Database\TestData.sdf</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\packages\Microsoft.SqlServer.Types.11.0.2\nativeBinaries\x64\msvcr100.dll">
-      <Link>SqlServerTypes\x64\msvcr100.dll</Link>
+    <Content Include="..\..\Redist\Sybase\Sybase.AdoNet45.AseClient.dll">
+      <Link>Sybase.AdoNet45.AseClient.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\packages\Microsoft.SqlServer.Types.11.0.2\nativeBinaries\x64\SqlServerSpatial110.dll">
-      <Link>SqlServerTypes\x64\SqlServerSpatial110.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\packages\Microsoft.SqlServer.Types.11.0.2\nativeBinaries\x86\msvcr100.dll">
-      <Link>SqlServerTypes\x86\msvcr100.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\packages\Microsoft.SqlServer.Types.11.0.2\nativeBinaries\x86\SqlServerSpatial110.dll">
-      <Link>SqlServerTypes\x86\SqlServerSpatial110.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <Content Include="AppveyorDataProviders.Core.txt" />
     <Content Include="AppveyorDataProviders.txt" />
     <Content Include="DefaultDataProviders.txt" />
+    <Content Include="MonoAppveyorDataProviders.txt" />
+    <Content Include="..\..\Data\Northwind.sqlite">
+      <Link>Database\Northwind.sqlite</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="SqlServerTypes\readme.htm" />
+    <Content Include="SqlServerTypes\x64\msvcr120.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="SqlServerTypes\x64\SqlServerSpatial140.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="SqlServerTypes\x86\msvcr120.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="SqlServerTypes\x86\SqlServerSpatial140.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TravisDataProviders.Core.txt" />
+    <Content Include="TravisDataProviders.Osx.Core.txt" />
+    <Content Include="TravisDataProviders.Osx.txt" />
+    <Content Include="TravisDataProviders.txt" />
     <None Include="..\..\Data\TestData.sqlite">
       <Link>Database\TestData.sqlite</Link>
     </None>
@@ -417,6 +510,7 @@
     </None>
     <None Include="linq2db.Tests.snk" />
     <None Include="packages.config" />
+    <None Include="Tests.project.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Source\LinqToDB.csproj">
@@ -426,14 +520,6 @@
     <ProjectReference Include="..\Model\Tests.Model.csproj">
       <Project>{D527524F-EC92-465E-9CAE-86278121675A}</Project>
       <Name>Tests.Model</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\FSharp\Tests.FSharp.fsproj">
-      <Project>{56109866-4005-4852-9f9a-19a7a8d3b369}</Project>
-      <Name>Tests.FSharp</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\VisualBasic\Tests.VisualBasic.vbproj">
-      <Project>{D11617AB-9F88-4C74-8ABD-F8580DB4B01B}</Project>
-      <Name>Tests.VisualBasic</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
@@ -466,20 +552,17 @@
   <ItemGroup>
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>if not exist "$(TargetDir)x86" md "$(TargetDir)x86"
-xcopy /s /y "$(SolutionDir)packages\Microsoft.SqlServer.Compact.4.0.8876.1\NativeBinaries\x86\*.*" "$(TargetDir)x86"
-if not exist "$(TargetDir)amd64" md "$(TargetDir)amd64"
-xcopy /s /y "$(SolutionDir)packages\Microsoft.SqlServer.Compact.4.0.8876.1\NativeBinaries\amd64\*.*" "$(TargetDir)amd64"
-if not exist "$(TargetDir)sybdrvado20.dll" xcopy /d /c /y "$(SolutionDir)Redist\Sybase\*.*" "$(TargetDir)"</PostBuildEvent>
+    <PostBuildEvent />
   </PropertyGroup>
-  <Import Project="..\..\packages\System.Data.SQLite.Core.1.0.101.0\build\net45\System.Data.SQLite.Core.targets" Condition="Exists('..\..\packages\System.Data.SQLite.Core.1.0.101.0\build\net45\System.Data.SQLite.Core.targets')" />
+  <Import Project="..\..\Packages\System.Data.SQLite.Core.1.0.105.0\build\net45\System.Data.SQLite.Core.targets" Condition="Exists('..\..\Packages\System.Data.SQLite.Core.1.0.105.0\build\net45\System.Data.SQLite.Core.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\packages\System.Data.SQLite.Core.1.0.101.0\build\net45\System.Data.SQLite.Core.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\packages\System.Data.SQLite.Core.1.0.101.0\build\net45\System.Data.SQLite.Core.targets'))" />
+    <Error Condition="!Exists('..\..\Packages\System.Data.SQLite.Core.1.0.105.0\build\net45\System.Data.SQLite.Core.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\Packages\System.Data.SQLite.Core.1.0.105.0\build\net45\System.Data.SQLite.Core.targets'))" />
   </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

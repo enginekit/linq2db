@@ -16,7 +16,6 @@ namespace LinqToDB.Mapping
 	{
 		public ColumnDescriptor(MappingSchema mappingSchema, ColumnAttribute columnAttribute, MemberAccessor memberAccessor)
 		{
-			MappingSchema  = mappingSchema;
 			MemberAccessor = memberAccessor;
 			MemberInfo     = memberAccessor.MemberInfo;
 
@@ -42,7 +41,19 @@ namespace LinqToDB.Mapping
 
 			if (columnAttribute.HasLength   ()) Length    = columnAttribute.Length;
 			if (columnAttribute.HasPrecision()) Precision = columnAttribute.Precision;
-			if (columnAttribute.HasScale    ()) Scale     =  columnAttribute.Scale;
+			if (columnAttribute.HasScale    ()) Scale     = columnAttribute.Scale;
+
+			if (Storage == null)
+			{
+				StorageType = MemberType;
+				StorageInfo = MemberInfo;
+			}
+			else
+			{
+				var expr = Expression.PropertyOrField(Expression.Constant(null, MemberInfo.DeclaringType), Storage);
+				StorageType = expr.Type;
+				StorageInfo = expr.Member;
+			}
 
 			var defaultCanBeNull = false;
 
@@ -50,7 +61,7 @@ namespace LinqToDB.Mapping
 				CanBeNull = columnAttribute.CanBeNull;
 			else
 			{
-				var na = mappingSchema.GetAttribute<NullableAttribute>(MemberInfo, attr => attr.Configuration);
+				var na = mappingSchema.GetAttribute<NullableAttribute>(MemberAccessor.TypeAccessor.Type, MemberInfo, attr => attr.Configuration);
 
 				if (na != null)
 				{
@@ -65,9 +76,9 @@ namespace LinqToDB.Mapping
 
 			if (columnAttribute.HasIsIdentity())
 				IsIdentity = columnAttribute.IsIdentity;
-			else
+			else if (MemberName.IndexOf(".") < 0)
 			{
-				var a = mappingSchema.GetAttribute<IdentityAttribute>(MemberInfo, attr => attr.Configuration);
+				var a = mappingSchema.GetAttribute<IdentityAttribute>(MemberAccessor.TypeAccessor.Type, MemberInfo, attr => attr.Configuration);
 				if (a != null)
 					IsIdentity = true;
 			}
@@ -80,9 +91,9 @@ namespace LinqToDB.Mapping
 
 			if (columnAttribute.HasIsPrimaryKey())
 				IsPrimaryKey = columnAttribute.IsPrimaryKey;
-			else
+			else if (MemberName.IndexOf(".") < 0)
 			{
-				var a = mappingSchema.GetAttribute<PrimaryKeyAttribute>(MemberInfo, attr => attr.Configuration);
+				var a = mappingSchema.GetAttribute<PrimaryKeyAttribute>(MemberAccessor.TypeAccessor.Type, MemberInfo, attr => attr.Configuration);
 
 				if (a != null)
 				{
@@ -93,7 +104,7 @@ namespace LinqToDB.Mapping
 
 			if (DbType == null || DataType == DataType.Undefined)
 			{
-				var a = mappingSchema.GetAttribute<DataTypeAttribute>(MemberInfo, attr => attr.Configuration);
+				var a = mappingSchema.GetAttribute<DataTypeAttribute>(MemberAccessor.TypeAccessor.Type, MemberInfo, attr => attr.Configuration);
 
 				if (a != null)
 				{
@@ -106,10 +117,11 @@ namespace LinqToDB.Mapping
 			}
 		}
 
-		public MappingSchema  MappingSchema   { get; private set; }
 		public MemberAccessor MemberAccessor  { get; private set; }
 		public MemberInfo     MemberInfo      { get; private set; }
+		public MemberInfo     StorageInfo     { get; private set; }
 		public Type           MemberType      { get; private set; }
+		public Type           StorageType     { get; private set; }
 		public string         MemberName      { get; private set; }
 		public string         ColumnName      { get; private set; }
 		public string         Storage         { get; private set; }
@@ -129,26 +141,26 @@ namespace LinqToDB.Mapping
 
 		Func<object,object> _getter;
 
-		public virtual object GetValue(object obj)
+		public virtual object GetValue(MappingSchema mappingSchema, object obj)
 		{
 			if (_getter == null)
 			{
 				var objParam   = Expression.Parameter(typeof(object), "obj");
 				var getterExpr = MemberAccessor.GetterExpression.GetBody(Expression.Convert(objParam, MemberAccessor.TypeAccessor.Type));
 
-				var expr = MappingSchema.GetConvertExpression(MemberType, typeof(DataParameter), createDefault : false);
+				var expr = mappingSchema.GetConvertExpression(MemberType, typeof(DataParameter), createDefault : false);
 
 				if (expr != null)
 				{
-					getterExpr = expr.GetBody(getterExpr);
+					getterExpr = Expression.PropertyOrField(expr.GetBody(getterExpr), "Value");
 				}
 				else
 				{
-					var type = Converter.GetDefaultMappingFromEnumType(MappingSchema, MemberType);
+					var type = Converter.GetDefaultMappingFromEnumType(mappingSchema, MemberType);
 
 					if (type != null)
 					{
-						expr = MappingSchema.GetConvertExpression(MemberType, type);
+						expr = mappingSchema.GetConvertExpression(MemberType, type);
 						getterExpr = expr.GetBody(getterExpr);
 					}
 				}

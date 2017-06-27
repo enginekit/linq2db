@@ -1,14 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Data.OleDb;
 using System.IO;
 using System.Runtime.InteropServices;
-using LinqToDB.Data;
 
 
 namespace LinqToDB.DataProvider.Access
 {
+	using Configuration;
+	using Data;
 	using Extensions;
 	using Mapping;
 	using SchemaProvider;
@@ -16,6 +18,7 @@ namespace LinqToDB.DataProvider.Access
 
 	public class AccessDataProvider : DataProviderBase
 	{
+		private readonly OleDbType _decimalType = OleDbType.Decimal;
 		public AccessDataProvider()
 			: this(ProviderName.Access, new AccessMappingSchema())
 		{
@@ -24,17 +27,24 @@ namespace LinqToDB.DataProvider.Access
 		protected AccessDataProvider(string name, MappingSchema mappingSchema)
 			: base(name, mappingSchema)
 		{
-			SqlProviderFlags.AcceptsTakeAsParameter    = false;
-			SqlProviderFlags.IsSkipSupported           = false;
-			SqlProviderFlags.IsCountSubQuerySupported  = false;
-			SqlProviderFlags.IsInsertOrUpdateSupported = false;
+			SqlProviderFlags.AcceptsTakeAsParameter      = false;
+			SqlProviderFlags.IsSkipSupported             = false;
+			SqlProviderFlags.IsCountSubQuerySupported    = false;
+			SqlProviderFlags.IsInsertOrUpdateSupported   = false;
+			SqlProviderFlags.TakeHintsSupported          = TakeHints.Percent;
+			SqlProviderFlags.IsCrossJoinSupported        = false;
+			SqlProviderFlags.IsInnerJoinAsCrossSupported = false;
 
-			SetCharField("DBTYPE_WCHAR", (r,i) => r.GetString(i).TrimEnd());
+			SetCharField("DBTYPE_WCHAR", (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharFieldToType<char>("DBTYPE_WCHAR", (r, i) => DataTools.GetChar(r, i));
 
 			SetProviderField<IDataReader,TimeSpan,DateTime>((r,i) => r.GetDateTime(i) - new DateTime(1899, 12, 30));
 			SetProviderField<IDataReader,DateTime,DateTime>((r,i) => GetDateTime(r, i));
 
 			_sqlOptimizer = new AccessSqlOptimizer(SqlProviderFlags);
+
+			if (System.Globalization.CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator != ".")
+				_decimalType = OleDbType.VarChar;
 		}
 
 		static DateTime GetDateTime(IDataReader dr, int idx)
@@ -69,7 +79,7 @@ namespace LinqToDB.DataProvider.Access
 
 		public override bool IsCompatibleConnection(IDbConnection connection)
 		{
-			return typeof(OleDbConnection).IsSameOrParentOf(connection.GetType());
+			return typeof(OleDbConnection).IsSameOrParentOf(Proxy.GetUnderlyingObject((DbConnection)connection).GetType());
 		}
 
 		public override ISchemaProvider GetSchemaProvider()
@@ -88,7 +98,7 @@ namespace LinqToDB.DataProvider.Access
 				//
 				case DataType.Decimal    :
 				case DataType.VarNumeric : 
-					((OleDbParameter)parameter).OleDbType = OleDbType.Decimal; return;
+					((OleDbParameter)parameter).OleDbType = _decimalType; return;
 
 				// OleDbType.DBTimeStamp is locale aware, OleDbType.Date is locale neutral.
 				//

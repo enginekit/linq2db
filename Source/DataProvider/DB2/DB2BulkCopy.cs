@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 
 namespace LinqToDB.DataProvider.DB2
 {
+	using Configuration;
 	using Data;
-	using SqlProvider;
+	using Extensions;
 
 	class DB2BulkCopy : BasicBulkCopy
 	{
@@ -36,9 +38,9 @@ namespace LinqToDB.DataProvider.DB2
 
 				if (_bulkCopyCreator == null)
 				{
-					var bulkCopyType       = _connectionType.Assembly.GetType("IBM.Data.DB2.DB2BulkCopy",              false);
-					var bulkCopyOptionType = _connectionType.Assembly.GetType("IBM.Data.DB2.DB2BulkCopyOptions",       false);
-					var columnMappingType  = _connectionType.Assembly.GetType("IBM.Data.DB2.DB2BulkCopyColumnMapping", false);
+					var bulkCopyType       = _connectionType.AssemblyEx().GetType("IBM.Data.DB2.DB2BulkCopy",              false);
+					var bulkCopyOptionType = _connectionType.AssemblyEx().GetType("IBM.Data.DB2.DB2BulkCopyOptions",       false);
+					var columnMappingType  = _connectionType.AssemblyEx().GetType("IBM.Data.DB2.DB2BulkCopyColumnMapping", false);
 
 					if (bulkCopyType != null)
 					{
@@ -50,7 +52,7 @@ namespace LinqToDB.DataProvider.DB2
 				if (_bulkCopyCreator != null)
 				{
 					var columns = descriptor.Columns.Where(c => !c.SkipOnInsert || options.KeepIdentity == true && c.IsIdentity).ToList();
-					var rd      = new BulkCopyReader(dataConnection.DataProvider, columns, source);
+					var rd      = new BulkCopyReader(dataConnection.DataProvider, dataConnection.MappingSchema, columns, source);
 					var rc      = new BulkCopyRowsCopied();
 
 					var bcOptions = 0; // Default
@@ -58,7 +60,7 @@ namespace LinqToDB.DataProvider.DB2
 					if (options.KeepIdentity == true) bcOptions |= 1; // KeepIdentity = 1, TableLock = 2, Truncate = 4,
 					if (options.TableLock    == true) bcOptions |= 2;
 
-					using (var bc = _bulkCopyCreator(dataConnection.Connection, bcOptions))
+					using (var bc = _bulkCopyCreator(Proxy.GetUnderlyingObject((DbConnection)dataConnection.Connection), bcOptions))
 					{
 						dynamic dbc = bc;
 

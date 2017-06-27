@@ -1,3 +1,25 @@
+﻿DROP TABLE InheritanceParent
+DROP TABLE InheritanceChild
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL CONSTRAINT PK_InheritanceParent PRIMARY KEY CLUSTERED,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
+ON [PRIMARY]
+GO
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL CONSTRAINT PK_InheritanceChild PRIMARY KEY CLUSTERED,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
+ON [PRIMARY]
+GO
+
 -- Person Table
 
 DROP TABLE Doctor
@@ -19,7 +41,10 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
@@ -332,6 +357,7 @@ CREATE TABLE AllTypes
 	smalldatetimeDataType    smalldatetime    NULL,
 
 	charDataType             char(1)          NULL,
+	char20DataType           char(20)         NULL,
 	varcharDataType          varchar(20)      NULL,
 	textDataType             text             NULL,
 	ncharDataType            nchar(20)        NULL,
@@ -477,7 +503,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    varbinary(5000) NULL,
 	SmallIntValue  smallint,
 	IntValue       int             NULL,
-	BigIntValue    bigint          NULL
+	BigIntValue    bigint          NULL,
+	StringValue    nvarchar(50)    NULL
 )
 GO
 

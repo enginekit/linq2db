@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Data;
+using System.Data.Common;
 using System.Linq.Expressions;
-
-using LinqToDB.Extensions;
 
 namespace LinqToDB.DataProvider
 {
+	using Configuration;
+	using Extensions;
 	using Mapping;
 
 	public abstract class DynamicDataProviderBase : DataProviderBase
@@ -47,7 +48,7 @@ namespace LinqToDB.DataProvider
 
 		public override bool IsCompatibleConnection(IDbConnection connection)
 		{
-			return GetConnectionType().IsSameOrParentOf(connection.GetType());
+			return GetConnectionType().IsSameOrParentOf(Proxy.GetUnderlyingObject((DbConnection)connection).GetType());
 		}
 
 		private         Type _dataReaderType;
@@ -69,11 +70,11 @@ namespace LinqToDB.DataProvider
 			return _createConnection(connectionString);
 		}
 
-		internal static Expression<Func<string,IDbConnection>> CreateConnectionExpression(Type connectionType)
+		public static Expression<Func<string,IDbConnection>> CreateConnectionExpression(Type connectionType)
 		{
 			var p = Expression.Parameter(typeof(string));
 			var l = Expression.Lambda<Func<string,IDbConnection>>(
-				Expression.New(connectionType.GetConstructor(new[] { typeof(string) }), p),
+				Expression.New(connectionType.GetConstructorEx(new[] { typeof(string) }), p),
 				p);
 
 			return l;
@@ -86,8 +87,8 @@ namespace LinqToDB.DataProvider
 			//   ((FbParameter)parameter).   FbDbType =           FbDbType.          TimeStamp;
 			string parameterTypeName, string propertyName, string dbTypeName, string valueName)
 		{
-			var pType  = connectionType.Assembly.GetType(parameterTypeName.Contains(".") ? parameterTypeName : connectionType.Namespace + "." + parameterTypeName, true);
-			var dbType = connectionType.Assembly.GetType(dbTypeName.       Contains(".") ? dbTypeName        : connectionType.Namespace + "." + dbTypeName,        true);
+			var pType  = connectionType.AssemblyEx().GetType(parameterTypeName.Contains(".") ? parameterTypeName : connectionType.Namespace + "." + parameterTypeName, true);
+			var dbType = connectionType.AssemblyEx().GetType(dbTypeName.       Contains(".") ? dbTypeName        : connectionType.Namespace + "." + dbTypeName,        true);
 			var value  = Enum.Parse(dbType, valueName);
 
 			var p = Expression.Parameter(typeof(IDbDataParameter));
@@ -107,8 +108,8 @@ namespace LinqToDB.DataProvider
 			//   ((FbParameter)parameter).   FbDbType =           FbDbType.          TimeStamp;
 			string parameterTypeName, string propertyName, string dbTypeName, string valueName)
 		{
-			var pType  = connectionType.Assembly.GetType(parameterTypeName.Contains(".") ? parameterTypeName : connectionType.Namespace + "." + parameterTypeName, true);
-			var dbType = connectionType.Assembly.GetType(dbTypeName.       Contains(".") ? dbTypeName        : connectionType.Namespace + "." + dbTypeName,        true);
+			var pType  = connectionType.AssemblyEx().GetType(parameterTypeName.Contains(".") ? parameterTypeName : connectionType.Namespace + "." + parameterTypeName, true);
+			var dbType = connectionType.AssemblyEx().GetType(dbTypeName.       Contains(".") ? dbTypeName        : connectionType.Namespace + "." + dbTypeName,        true);
 			var value  = Enum.Parse(dbType, valueName);
 
 			var p = Expression.Parameter(typeof(IDbDataParameter));

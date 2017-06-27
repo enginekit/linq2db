@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Linq;
 using System.Data.SqlClient;
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
@@ -14,7 +16,10 @@ using LinqToDB.Data;
 using LinqToDB.DataProvider.SqlServer;
 using LinqToDB.Mapping;
 
+#if !NETSTANDARD
 using Microsoft.SqlServer.Types;
+using SqlServerTypes;
+#endif
 
 using NUnit.Framework;
 
@@ -23,6 +28,15 @@ namespace Tests.DataProvider
 	[TestFixture]
 	public class SqlServerTests : DataProviderTestBase
 	{
+#if !NETSTANDARD && !MONO
+		[OneTimeSetUp]
+		protected void InitializeFixture()
+		{
+			// load spatial types support
+			Utilities.LoadNativeAssemblies(AppDomain.CurrentDomain.BaseDirectory);
+		}
+#endif
+
 		[AttributeUsage(AttributeTargets.Method)]
 		class SqlServerDataContextAttribute : IncludeDataContextSourceAttribute
 		{
@@ -107,9 +121,11 @@ namespace Tests.DataProvider
 				Assert.That(TestType<DateTime?>      (conn, "datetime2DataType",      DataType.DateTime2,      "AllTypes2"), Is.EqualTo(new DateTime(2012, 12, 12, 12, 12, 12, 12)));
 				Assert.That(TestType<TimeSpan?>      (conn, "timeDataType",           DataType.Time,           "AllTypes2"), Is.EqualTo(new TimeSpan(0, 12, 12, 12, 12)));
 
+#if !NETSTANDARD
 				Assert.That(TestType<SqlHierarchyId?>(conn, "hierarchyidDataType",              tableName:"AllTypes2"),            Is.EqualTo(SqlHierarchyId.Parse("/1/3/")));
 				Assert.That(TestType<SqlGeography>   (conn, "geographyDataType", skipPass:true, tableName:"AllTypes2").ToString(), Is.EqualTo("LINESTRING (-122.36 47.656, -122.343 47.656)"));
 				Assert.That(TestType<SqlGeometry>    (conn, "geometryDataType",  skipPass:true, tableName:"AllTypes2").ToString(), Is.EqualTo("LINESTRING (100 100, 20 180, 180 180)"));
+#endif
 			}
 		}
 
@@ -137,7 +153,7 @@ namespace Tests.DataProvider
 			{
 				var sqlValue = expectedValue is bool ? (bool)(object)expectedValue? 1 : 0 : (object)expectedValue;
 
-				var sql = string.Format("SELECT Cast({0} as {1})", sqlValue ?? "NULL", sqlType);
+				var sql = string.Format(CultureInfo.InvariantCulture, "SELECT Cast({0} as {1})", sqlValue ?? "NULL", sqlType);
 
 				Debug.WriteLine(sql + " -> " + typeof(T));
 
@@ -276,7 +292,8 @@ namespace Tests.DataProvider
 		{
 			using (var conn = new DataConnection(context))
 			{
-				var dto = new DateTimeOffset(2012, 12, 12, 12, 12, 12, 12, new TimeSpan(5, 0, 0));
+				var dto = new DateTimeOffset(2012, 12, 12, 12, 12, 12, 12, new TimeSpan( 5, 0, 0));
+				var lto = new DateTimeOffset(2012, 12, 12, 13, 12, 12, 12, new TimeSpan(-4, 0, 0));
 
 				Assert.That(conn.Execute<DateTimeOffset>(
 					"SELECT Cast('2012-12-12 12:12:12.012' as datetime2)"),
@@ -288,11 +305,11 @@ namespace Tests.DataProvider
 
 				Assert.That(conn.Execute<DateTime>(
 					"SELECT Cast('2012-12-12 13:12:12.012 -04:00' as datetimeoffset)"),
-					Is.EqualTo(new DateTime(2012, 12, 12, 12, 12, 12, 12)));
+					Is.EqualTo(lto.LocalDateTime));
 
 				Assert.That(conn.Execute<DateTime?>(
 					"SELECT Cast('2012-12-12 13:12:12.012 -04:00' as datetimeoffset)"),
-					Is.EqualTo(new DateTime(2012, 12, 12, 12, 12, 12, 12)));
+					Is.EqualTo(lto.LocalDateTime));
 
 				Assert.That(conn.Execute<DateTimeOffset>(
 					"SELECT Cast('2012-12-12 12:12:12.012 +05:00' as datetimeoffset)"),
@@ -393,8 +410,18 @@ namespace Tests.DataProvider
 				Assert.That(conn.Execute<string>("SELECT Cast('12345' as varchar(20))"),   Is.EqualTo("12345"));
 				Assert.That(conn.Execute<string>("SELECT Cast(NULL    as varchar(20))"),   Is.Null);
 
-				Assert.That(conn.Execute<string>("SELECT Cast('12345' as text)"),          Is.EqualTo("12345"));
-				Assert.That(conn.Execute<string>("SELECT Cast(NULL    as text)"),          Is.Null);
+				var isScCollation = conn.Execute<int>("SELECT COUNT(*) FROM sys.Databases WHERE database_id = DB_ID() AND collation_name LIKE '%_SC'") > 0;
+				if (isScCollation)
+				{
+					// explicit collation set for legacy text types as they doesn't support *_SC collations
+					Assert.That(conn.Execute<string>("SELECT Cast('12345' COLLATE Latin1_General_CI_AS as text)"),                Is.EqualTo("12345"));
+					Assert.That(conn.Execute<string>("SELECT Cast(CAST(NULL as nvarchar) COLLATE Latin1_General_CI_AS as text)"), Is.Null);
+				}
+				else
+				{
+					Assert.That(conn.Execute<string>("SELECT Cast('12345' as text)"),     Is.EqualTo("12345"));
+					Assert.That(conn.Execute<string>("SELECT Cast(NULL    as text)"),     Is.Null);
+				}
 
 				if (context != ProviderName.SqlServer2000)
 				{
@@ -410,8 +437,17 @@ namespace Tests.DataProvider
 				Assert.That(conn.Execute<string>("SELECT Cast('12345' as nvarchar(20))"),  Is.EqualTo("12345"));
 				Assert.That(conn.Execute<string>("SELECT Cast(NULL    as nvarchar(20))"),  Is.Null);
 
-				Assert.That(conn.Execute<string>("SELECT Cast('12345' as ntext)"),         Is.EqualTo("12345"));
-				Assert.That(conn.Execute<string>("SELECT Cast(NULL    as ntext)"),         Is.Null);
+				if (isScCollation)
+				{
+					// explicit collation set for legacy text types as they doesn't support *_SC collations
+					Assert.That(conn.Execute<string>("SELECT Cast('12345' COLLATE Latin1_General_CI_AS as ntext)"),                Is.EqualTo("12345"));
+					Assert.That(conn.Execute<string>("SELECT Cast(CAST(NULL as nvarchar) COLLATE Latin1_General_CI_AS as ntext)"), Is.Null);
+				}
+				else
+				{
+					Assert.That(conn.Execute<string>("SELECT Cast('12345' as ntext)"), Is.EqualTo("12345"));
+					Assert.That(conn.Execute<string>("SELECT Cast(NULL    as ntext)"), Is.Null);
+				}
 
 				if (context != ProviderName.SqlServer2000)
 				{
@@ -561,6 +597,7 @@ namespace Tests.DataProvider
 			}
 		}
 
+#if !NETSTANDARD
 		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
 		public void TestHierarchyID(string context)
 		{
@@ -614,6 +651,7 @@ namespace Tests.DataProvider
 				Assert.That(conn.Execute<SqlGeography>("SELECT @p", DataParameter.Udt("p", id)).ToString(),               Is.EqualTo(id.ToString()));
 			}
 		}
+#endif
 
 		[Test, SqlServerDataContext]
 		public void TestXml(string context)
@@ -675,7 +713,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Table(Schema="dbo", Name="LinqDataTypes")]
+		[Table(Schema = "dbo", Name = "LinqDataTypes")]
 		class DataTypes
 		{
 			[Column] public int      ID;
@@ -815,7 +853,7 @@ namespace Tests.DataProvider
 
 		static readonly AllTypes[] _allTypeses =
 		{
-			#region data
+#region data
 			new AllTypes
 			{
 				ID                       = 700,
@@ -864,7 +902,7 @@ namespace Tests.DataProvider
 			{
 				ID                       = 701,
 			},
-			#endregion
+#endregion
 		};
 
 		void BulkCopyAllTypes(string context, BulkCopyType bulkCopyType)
@@ -915,10 +953,28 @@ namespace Tests.DataProvider
 
 			foreach (var column in ed.Columns)
 			{
-				var actualValue = column.GetValue(actual);
-				var testValue   = column.GetValue(test);
+				var actualValue = column.GetValue(mappingSchema, actual);
+				var testValue   = column.GetValue(mappingSchema, test);
 
-				if (column.SkipOnInsert == false)
+				// timestampDataType autogenerated
+				if (column.MemberName == "timestampDataType")
+					continue;
+
+#if !NETSTANDARD
+				if (actualValue is SqlGeometry)
+				{
+					Assert.That(actualValue == null  || ((SqlGeometry) actualValue).IsNull ? null : actualValue.ToString(),
+						Is.EqualTo(testValue == null || ((SqlGeometry) testValue).IsNull   ? null : testValue.ToString()),
+						"Column  : {0}", column.MemberName);
+				}
+				else if (actualValue is SqlGeography)
+				{
+					Assert.That(actualValue == null  || ((SqlGeography) actualValue).IsNull ? null : actualValue.ToString(),
+						Is.EqualTo(testValue == null || ((SqlGeography) testValue).IsNull   ? null : testValue.ToString()),
+						"Column  : {0}", column.MemberName);
+				}
+				else
+#endif
 					Assert.That(actualValue, Is.EqualTo(testValue),
 						actualValue is DateTimeOffset
 							? "Column  : {0} {1:yyyy-MM-dd HH:mm:ss.fffffff zzz} {2:yyyy-MM-dd HH:mm:ss.fffffff zzz}"
@@ -928,6 +984,82 @@ namespace Tests.DataProvider
 						testValue);
 			}
 		}
+
+		[Table(Name="AllTypes2")]
+		class AllTypes2
+		{
+			[Column(DbType="int"),   PrimaryKey, Identity] public int             ID                     { get; set; } // int
+			[Column(DbType="date"),              Nullable] public DateTime?       dateDataType           { get; set; } // date
+			[Column(DbType="datetimeoffset(7)"), Nullable] public DateTimeOffset? datetimeoffsetDataType { get; set; } // datetimeoffset(7)
+			[Column(DbType="datetime2(7)"),      Nullable] public DateTime?       datetime2DataType      { get; set; } // datetime2(7)
+			[Column(DbType="time(7)"),           Nullable] public TimeSpan?       timeDataType           { get; set; } // time(7)
+#if !NETSTANDARD
+			[Column(DbType="hierarchyid"),       Nullable] public SqlHierarchyId  hierarchyidDataType    { get; set; } // hierarchyid
+			[Column(DbType="geography"),         Nullable] public SqlGeography    geographyDataType      { get; set; } // geography
+			[Column(DbType="geometry"),          Nullable] public SqlGeometry     geometryDataType       { get; set; } // geometry
+#endif
+		}
+
+		IEnumerable<AllTypes2> GenerateAllTypes2(int startId, int count)
+		{
+			for (int i = 0; i < count; i++)
+			{
+				yield return new AllTypes2
+				{
+					ID                     = startId + i,
+					dateDataType           = DateTime.Today.AddDays(i),
+					datetimeoffsetDataType = DateTime.Now.AddMinutes(i),
+					datetime2DataType      = DateTime.Today.AddDays(i),
+					timeDataType           = TimeSpan.FromSeconds(i),
+#if !NETSTANDARD
+					hierarchyidDataType    = SqlHierarchyId.Parse("/1/3/"),
+					geographyDataType      = SqlGeography.Parse("LINESTRING (-122.36 47.656, -122.343 47.656)"),
+					geometryDataType       = SqlGeometry.Parse("LINESTRING (100 100, 20 180, 180 180)"),
+#endif
+				};
+			}
+		}
+
+		void BulkCopyAllTypes2(string context, BulkCopyType bulkCopyType)
+		{
+			using (var db = new DataConnection(context))
+			{
+				db.CommandTimeout = 60;
+
+				db.GetTable<AllTypes2>().Delete(p => p.ID >= 3);
+
+				var allTypes2 = GenerateAllTypes2(3, 10).ToArray();
+				db.BulkCopy(
+					new BulkCopyOptions
+					{
+						BulkCopyType       = bulkCopyType,
+						RowsCopiedCallback = copied => Debug.WriteLine(copied.RowsCopied),
+						KeepIdentity       = true,
+					},
+					allTypes2);
+
+				var loaded = db.GetTable<AllTypes2>().Where(p => p.ID >= 3).OrderBy(p=> p.ID).ToArray();
+
+				Assert.That(loaded.Count, Is.EqualTo(allTypes2.Length));
+
+				for (var i = 0; i < loaded.Length; i++)
+					CompareObject(db.MappingSchema, loaded[i], allTypes2[i]);
+			}
+		}
+
+#if !NETSTANDARD
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void BulkCopyAllTypes2MultipleRows(string context)
+		{
+			BulkCopyAllTypes2(context, BulkCopyType.MultipleRows);
+		}
+
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void BulkCopyAllTypes2ProviderSpecific(string context)
+		{
+			BulkCopyAllTypes2(context, BulkCopyType.ProviderSpecific);
+		}
+#endif
 
 		[Test, SqlServerDataContext]
 		public void CreateAlltypes(string context)
@@ -956,6 +1088,36 @@ namespace Tests.DataProvider
 				db.DropTable<AllTypes>();
 			}
 		}
+
+#if !NETSTANDARD
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
+		public void CreateAlltypes2(string context)
+		{
+			using (var db = new DataConnection(context))
+			{
+				var ms = new MappingSchema();
+
+				db.AddMappingSchema(ms);
+
+				ms.GetFluentMappingBuilder()
+					.Entity<AllTypes2>()
+					.HasTableName("AllType2CreateTest");
+
+				try
+				{
+					db.DropTable<AllTypes2>();
+				}
+				catch
+				{
+				}
+
+				var table = db.CreateTable<AllTypes2>();
+				var list = table.ToList();
+
+				db.DropTable<AllTypes2>();
+			}
+		}
+#endif
 
 		[Table("#TempTable")]
 		class TempTable
@@ -997,15 +1159,19 @@ namespace Tests.DataProvider
 		public void OverflowTest(string context)
 		{
 			var func = SqlServerTools.DataReaderGetDecimal;
-
-			SqlServerTools.DataReaderGetDecimal = GetDecimal;
-
-			using (var db = new DataConnection(context))
+			try
 			{
-				var list = db.GetTable<DecimalOverflow>().ToList();
-			}
+				SqlServerTools.DataReaderGetDecimal = GetDecimal;
 
-			SqlServerTools.DataReaderGetDecimal = func;
+				using (var db = new DataConnection(context))
+				{
+					var list = db.GetTable<DecimalOverflow>().ToList();
+				}
+			}
+			finally
+			{
+				SqlServerTools.DataReaderGetDecimal = func;
+			}
 		}
 
 		const int ClrPrecision = 29;
@@ -1019,7 +1185,7 @@ namespace Tests.DataProvider
 				if (value.Precision > ClrPrecision)
 				{
 					var str = value.ToString();
-					var val = decimal.Parse(str);
+					var val = decimal.Parse(str, CultureInfo.InvariantCulture);
 
 					return val;
 				}
@@ -1047,14 +1213,39 @@ namespace Tests.DataProvider
 		{
 			var func = SqlServerTools.DataReaderGetDecimal;
 
-			SqlServerTools.DataReaderGetDecimal = (rd,idx) => { throw new Exception(); };
-
-			using (var db = new DataConnection(context))
+			try
 			{
-				var list = db.GetTable<DecimalOverflow2>().ToList();
-			}
+				SqlServerTools.DataReaderGetDecimal = (rd, idx) => { throw new Exception(); };
 
-			SqlServerTools.DataReaderGetDecimal = func;
+				using (var db = new DataConnection(context))
+				{
+					var list = db.GetTable<DecimalOverflow2>().ToList();
+				}
+			}
+			finally
+			{
+				SqlServerTools.DataReaderGetDecimal = func;
+			}
 		}
+
+		[Test, SqlServerDataContext]
+		public void SelectTableWithHintTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(Person, db.Person.With("TABLOCK"));
+			}
+		}
+
+		[Test, SqlServerDataContext]
+		public void UpdateTableWithHintTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				Assert.AreEqual(Person.Count(), db.Person.Set(_ => _.FirstName, _ => _.FirstName).Update());
+				Assert.AreEqual(Person.Count(), db.Person.With("TABLOCK").Set(_ => _.FirstName, _ => _.FirstName).Update());
+			}
+		}
+
 	}
 }

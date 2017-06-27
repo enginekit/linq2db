@@ -1,10 +1,33 @@
-DROP TABLE "Doctor"
+﻿DROP TABLE "Doctor"
 GO
 
 DROP TABLE "Patient"
 GO
 
 DROP TABLE "Person"
+GO
+
+DROP TABLE "InheritanceParent"
+GO
+
+CREATE TABLE "InheritanceParent"
+(
+	"InheritanceParentId" INTEGER       PRIMARY KEY NOT NULL,
+	"TypeDiscriminator"   INTEGER                       NULL,
+	"Name"                VARCHAR(50)                   NULL
+)
+GO
+
+DROP TABLE "InheritanceChild"
+GO
+
+CREATE TABLE "InheritanceChild"
+(
+	"InheritanceChildId"  INTEGER      PRIMARY KEY NOT NULL,
+	"InheritanceParentId" INTEGER                  NOT NULL,
+	"TypeDiscriminator"   INTEGER                      NULL,
+	"Name"                VARCHAR(50)                  NULL
+)
 GO
 
 CREATE TABLE "Person"
@@ -21,15 +44,19 @@ INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('John',   'Pupk
 GO
 INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Tester', 'Testerson', 'M')
 GO
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jürgen', 'König',     'M')
+GO
 
 -- Doctor Table Extension
 
 CREATE TABLE "Doctor"
 (
-	"PersonID" INTEGER     NOT NULL,
+	"PersonID" INTEGER     PRIMARY KEY NOT NULL,
 	"Taxonomy" VARCHAR(50) NOT NULL,
-	FOREIGN KEY "FK_Doctor_Person" ("PersonID")
-	REFERENCES "Person"
+
+	FOREIGN KEY "FK_Doctor_Person" ("PersonID") REFERENCES "Person"
 )
 GO
 
@@ -66,8 +93,10 @@ GO
 
 CREATE TABLE "Patient"
 (
-	"PersonID"  INTEGER      NOT NULL,
-	"Diagnosis" VARCHAR(256) NOT NULL
+	"PersonID"  INTEGER      PRIMARY KEY NOT NULL,
+	"Diagnosis" VARCHAR(256) NOT NULL,
+
+	FOREIGN KEY "FK_Patient_Person" ("PersonID") REFERENCES "Person"
 )
 GO
 
@@ -98,13 +127,14 @@ CREATE TABLE "LinqDataTypes"
 	"ID"             int,
 	"MoneyValue"     decimal(10,4),
 	"DateTimeValue"  timestamp,
-	"DateTimeValue2" timestamp  NULL,
+	"DateTimeValue2" timestamp   NULL,
 	"BoolValue"      smallint,
 	"GuidValue"      char(16) for bit DATA,
-	"BinaryValue"    blob(5000) NULL,
+	"BinaryValue"    blob(5000)  NULL,
 	"SmallIntValue"  smallint,
-	"IntValue"       int        NULL,
-	"BigIntValue"    bigint     NULL
+	"IntValue"       int         NULL,
+	"BigIntValue"    bigint      NULL,
+	"StringValue"    VARCHAR(50) NULL
 )
 GO
 
@@ -133,6 +163,7 @@ CREATE TABLE AllTypes
 	doubleDataType           double                NULL,
 
 	charDataType             char(1)               NULL,
+	char20DataType           char(20)              NULL,
 	varcharDataType          varchar(20)           NULL,
 	clobDataType             clob                  NULL,
 	dbclobDataType           dbclob(100)           NULL,

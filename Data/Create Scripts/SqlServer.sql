@@ -1,13 +1,39 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Doctor') AND type in (N'U'))
+﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Doctor') AND type in (N'U'))
 BEGIN DROP TABLE Doctor END
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Patient') AND type in (N'U'))
 BEGIN DROP TABLE Patient END
 
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('InheritanceParent') AND type in (N'U'))
+BEGIN DROP TABLE InheritanceParent END
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('InheritanceChild') AND type in (N'U'))
+BEGIN DROP TABLE InheritanceChild END
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL CONSTRAINT PK_InheritanceParent PRIMARY KEY CLUSTERED,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
+ON [PRIMARY]
+GO
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL CONSTRAINT PK_InheritanceChild PRIMARY KEY CLUSTERED,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
+ON [PRIMARY]
+GO
+
 -- Person Table
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Person') AND type in (N'U'))
 BEGIN DROP TABLE Person END
+
 
 CREATE TABLE Person
 (
@@ -24,7 +50,10 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES (N'Jürgen', N'König',   'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
@@ -352,11 +381,15 @@ CREATE TABLE AllTypes
 	smalldatetimeDataType    smalldatetime     NULL,
 
 	charDataType             char(1)           NULL,
+	char20DataType           char(20)          NULL,
 	varcharDataType          varchar(20)       NULL,
-	textDataType             text              NULL,
+	-- explicit collation set for legacy text types as they doesn't support *_SC collations and this script will
+	-- fail if database has such collation
+	textDataType             text  COLLATE Latin1_General_CI_AS NULL,
 	ncharDataType            nchar(20)         NULL,
 	nvarcharDataType         nvarchar(20)      NULL,
-	ntextDataType            ntext             NULL,
+	-- see textDataType column notes
+	ntextDataType            ntext COLLATE Latin1_General_CI_AS NULL,
 
 	binaryDataType           binary            NULL,
 	varbinaryDataType        varbinary         NULL,
@@ -501,12 +534,14 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('ParentChildVie
 BEGIN DROP VIEW ParentChildView END
 GO
 
-
-DROP TABLE Parent
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Parent') AND type in (N'U'))
+BEGIN DROP TABLE Parent END
 GO
-DROP TABLE Child
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Child') AND type in (N'U'))
+BEGIN DROP TABLE Child END
 GO
-DROP TABLE GrandChild
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('GrandChild') AND type in (N'U'))
+BEGIN DROP TABLE GrandChild END
 GO
 
 CREATE TABLE Parent      (ParentID int, Value1 int, _ID INT IDENTITY PRIMARY KEY)
@@ -574,7 +609,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    varbinary(5000),
 	SmallIntValue  smallint,
 	IntValue       int NULL,
-	BigIntValue    bigint NULL
+	BigIntValue    bigint NULL,
+	StringValue    nvarchar(50) NULL
 )
 GO
 -- SKIP SqlServer.2005 END
@@ -594,7 +630,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    varbinary(5000) NULL,
 	SmallIntValue  smallint,
 	IntValue       int             NULL,
-	BigIntValue    bigint          NULL
+	BigIntValue    bigint          NULL,
+	StringValue    nvarchar(50)    NULL
 )
 GO
 -- SKIP SqlAzure.2012 END
@@ -602,7 +639,8 @@ GO
 -- SKIP SqlServer.2014 END
 -- SKIP SqlServer.2008 END
 
-DROP TABLE TestIdentity
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('TestIdentity') AND type in (N'U'))
+BEGIN DROP TABLE TestIdentity END
 GO
 
 CREATE TABLE TestIdentity (

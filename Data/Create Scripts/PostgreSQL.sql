@@ -1,11 +1,35 @@
-DROP TABLE "Doctor"
+﻿DROP TABLE IF EXISTS "Doctor"
 GO
 
-DROP TABLE "Patient"
+DROP TABLE IF EXISTS "Patient"
 GO
 
-DROP TABLE "Person"
+DROP TABLE IF EXISTS "Person"
 GO
+
+DROP TABLE IF EXISTS "InheritanceParent"
+GO
+
+CREATE TABLE "InheritanceParent"
+(
+	"InheritanceParentId" INTEGER       PRIMARY KEY,
+	"TypeDiscriminator"   INTEGER                       NULL,
+	"Name"                VARCHAR(50)                   NULL
+)
+GO
+
+DROP TABLE IF EXISTS "InheritanceChild"
+GO
+
+CREATE TABLE "InheritanceChild"
+(
+	"InheritanceChildId"  INTEGER      PRIMARY KEY,
+	"InheritanceParentId" INTEGER                  NOT NULL,
+	"TypeDiscriminator"   INTEGER                      NULL,
+	"Name"                VARCHAR(50)                  NULL
+)
+GO
+
 
 CREATE TABLE "Person"
 ( 
@@ -22,12 +46,15 @@ INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('John',   'Pupk
 GO
 INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jürgen', 'König',     'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE "Doctor"
 (
-	"PersonID" INTEGER     references "Person"("PersonID") NOT NULL,
+	"PersonID" INTEGER     primary key references "Person"("PersonID") NOT NULL,
 	"Taxonomy" VARCHAR(50) NOT NULL
 )
 GO
@@ -39,7 +66,7 @@ GO
 
 CREATE TABLE "Patient"
 (
-	"PersonID"  INTEGER      references "Person"("PersonID") NOT NULL,
+	"PersonID"  INTEGER      primary key references "Person"("PersonID") NOT NULL,
 	"Diagnosis" VARCHAR(256) NOT NULL
 )
 GO
@@ -65,11 +92,11 @@ END;$_$
 GO
 
 
-DROP TABLE "Parent"
+DROP TABLE IF EXISTS "Parent"
 GO
-DROP TABLE "Child"
+DROP TABLE IF EXISTS "Child"
 GO
-DROP TABLE "GrandChild"
+DROP TABLE IF EXISTS "GrandChild"
 GO
 
 CREATE TABLE "Parent"      ("ParentID" int, "Value1" int)
@@ -80,7 +107,7 @@ CREATE TABLE "GrandChild"  ("ParentID" int, "ChildID" int, "GrandChildID" int)
 GO
 
 
-DROP TABLE "LinqDataTypes"
+DROP TABLE IF EXISTS "LinqDataTypes"
 GO
 
 CREATE TABLE "LinqDataTypes"
@@ -91,10 +118,11 @@ CREATE TABLE "LinqDataTypes"
 	"DateTimeValue2" timestamp,
 	"BoolValue"      boolean,
 	"GuidValue"      uuid,
-	"BinaryValue"    bytea  NULL,
+	"BinaryValue"    bytea       NULL,
 	"SmallIntValue"  smallint,
-	"IntValue"       int    NULL,
-	"BigIntValue"    bigint NULL
+	"IntValue"       int         NULL,
+	"BigIntValue"    bigint      NULL,
+	"StringValue"    varchar(50) NULL
 )
 GO
 
@@ -104,7 +132,7 @@ AS $$ SELECT * FROM "Parent" WHERE "ParentID" = $1 $$
 LANGUAGE SQL;
 GO
 
-DROP TABLE entity
+DROP TABLE IF EXISTS  entity
 GO
 
 CREATE TABLE entity
@@ -129,22 +157,22 @@ $BODY$
 GO
 
 
-DROP TABLE "SequenceTest1"
+DROP TABLE IF EXISTS "SequenceTest1"
 GO
 
-DROP TABLE "SequenceTest2"
+DROP TABLE IF EXISTS "SequenceTest2"
 GO
 
-DROP TABLE "SequenceTest3"
+DROP TABLE IF EXISTS "SequenceTest3"
 GO
 
-DROP SEQUENCE SequenceTestSeq
+DROP SEQUENCE IF EXISTS SequenceTestSeq
 GO
 
 CREATE SEQUENCE SequenceTestSeq INCREMENT 1 START 1
 GO
 
-DROP SEQUENCE "SequenceTest2_ID_seq"
+DROP SEQUENCE IF EXISTS "SequenceTest2_ID_seq"
 GO
 
 CREATE SEQUENCE "SequenceTest2_ID_seq" INCREMENT 1 START 1
@@ -172,10 +200,10 @@ CREATE TABLE "SequenceTest3"
 GO
 
 
-DROP TABLE "TestIdentity"
+DROP TABLE IF EXISTS "TestIdentity"
 GO
 
-DROP SEQUENCE "TestIdentity_ID_seq"
+DROP SEQUENCE IF EXISTS "TestIdentity_ID_seq"
 GO
 
 CREATE SEQUENCE "TestIdentity_ID_seq" INCREMENT 1 START 1
@@ -187,10 +215,10 @@ CREATE TABLE "TestIdentity" (
 GO
 
 
-DROP TABLE AllTypes
+DROP TABLE IF EXISTS AllTypes
 GO
 
-DROP TYPE color
+DROP TYPE IF EXISTS color
 GO
 
 CREATE TYPE color AS ENUM ('Red', 'Green', 'Blue');
@@ -216,6 +244,7 @@ CREATE TABLE AllTypes
 	intervalDataType    interval                 NULL,
 
 	charDataType        char(1)                  NULL,
+	char20DataType      char(20)                 NULL,
 	varcharDataType     varchar(20)              NULL,
 	textDataType        text                     NULL,
 
@@ -366,22 +395,22 @@ SELECT
 
 GO
 
-DROP TABLE TestSameName
+DROP TABLE IF EXISTS TestSameName
 GO
 
-DROP TABLE test_schema.TestSameName
+DROP TABLE IF EXISTS test_schema.TestSameName
 GO
 
-DROP TABLE test_schema.TestSerialIdentity
+DROP TABLE IF EXISTS test_schema.TestSerialIdentity
 GO
 
-DROP TABLE test_schema."TestSchemaIdentity"
+DROP TABLE IF EXISTS test_schema."TestSchemaIdentity"
 GO
 
-DROP SEQUENCE test_schema."TestSchemaIdentity_ID_seq"
+DROP SEQUENCE IF EXISTS test_schema."TestSchemaIdentity_ID_seq"
 GO
 
-DROP SCHEMA test_schema
+DROP SCHEMA IF EXISTS test_schema
 GO
 
 CREATE SCHEMA test_schema

@@ -1,21 +1,38 @@
-USE master
-GO
-
-DROP DATABASE TestData
-GO
-
-CREATE DATABASE TestData
-GO
-
-USE TestData
-GO
-
-IF OBJECT_ID('dbo.Doctor') IS NOT NULL
+﻿IF OBJECT_ID('dbo.Doctor') IS NOT NULL
 BEGIN DROP TABLE Doctor END
 GO
 
 IF OBJECT_ID('dbo.Patient') IS NOT NULL
 BEGIN DROP TABLE Patient END
+GO
+
+IF OBJECT_ID('dbo.InheritanceParent') IS NOT NULL
+BEGIN DROP TABLE InheritanceParent END
+GO
+
+IF OBJECT_ID('dbo.InheritanceChild') IS NOT NULL
+BEGIN DROP TABLE InheritanceChild END
+GO
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL,
+
+	CONSTRAINT PK_InheritanceParent PRIMARY KEY CLUSTERED (InheritanceParentId)
+)
+GO
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL,
+
+	CONSTRAINT PK_InheritanceChild PRIMARY KEY CLUSTERED (InheritanceChildId)
+)
 GO
 
 -- Person Table
@@ -39,7 +56,10 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
@@ -100,7 +120,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    binary(500)   NULL,
 	SmallIntValue  smallint      NULL,
 	IntValue       int           NULL,
-	BigIntValue    bigint        NULL
+	BigIntValue    bigint        NULL,
+	StringValue    nvarchar(50)  NULL
 )
 GO
 
@@ -145,6 +166,7 @@ CREATE TABLE AllTypes
 	timeDataType             time              NULL,
 
 	charDataType             char(1)           NULL,
+	char20DataType           char(20)          NULL,
 	varcharDataType          varchar(20)       NULL,
 	textDataType             text              NULL,
 	ncharDataType            nchar(20)         NULL,

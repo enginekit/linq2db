@@ -20,7 +20,7 @@ namespace Tests.xUpdate
 			public DateTime? CreatedOn;
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource(ProviderName.OracleNative)]
 		public void CreateTable1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -48,7 +48,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, IncludeDataContextSource(false, ProviderName.SqlServer2008 /*, ProviderName.DB2*/)]
+		[Test, IncludeDataContextSource(false, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014 /*, ProviderName.DB2*/)]
 		public void CreateLocalTempTable1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -64,7 +64,9 @@ namespace Tests.xUpdate
 				{
 					switch (context)
 					{
-						case ProviderName.SqlServer2008 : db.DropTable<TestTable>("#" + tableName); break;
+						case ProviderName.SqlServer2008 : 
+						case ProviderName.SqlServer2012 : 
+						case ProviderName.SqlServer2014 : db.DropTable<TestTable>("#" + tableName); break;
 						default                         : db.DropTable<TestTable>(tableName);       break;
 					}
 				}
@@ -76,7 +78,9 @@ namespace Tests.xUpdate
 
 				switch (context)
 				{
-					case ProviderName.SqlServer2008 :
+					case ProviderName.SqlServer2008 : 
+					case ProviderName.SqlServer2012 : 
+					case ProviderName.SqlServer2014 :
 						table = db.CreateTable<TestTable>("#" + tableName);
 						break;
 					case ProviderName.DB2 :
@@ -240,7 +244,7 @@ namespace Tests.xUpdate
 
 		class TestCreateFormat
 		{
-			[Column(CreateFormat="{0}{1}{2}{3}/* test */"), NotNull]
+			[Column(CreateFormat = "{0}{1}{2}{3}/* test */"), NotNull]
 			public int Field1;
 			[Column]
 			public int Field2;

@@ -102,10 +102,12 @@ namespace LinqToDB.Linq.Builder
 					if (info.Members.Count == 0)
 						throw new InvalidOperationException();
 
+					var mi = info.Members.First(m => m.DeclaringType.IsSameOrParentOf(_unionParameter.Type));
+
 					var member = new Member
 					{
 						SequenceInfo     = info,
-						MemberExpression = Expression.MakeMemberAccess(_unionParameter, info.Members[0])
+						MemberExpression = Expression.MakeMemberAccess(_unionParameter, mi)
 					};
 
 					members.Add(new UnionMember { Member = member, Info1 = info });
@@ -118,7 +120,16 @@ namespace LinqToDB.Linq.Builder
 
 					var em = members.FirstOrDefault(m =>
 						m.Member.SequenceInfo != null &&
-						m.Member.SequenceInfo.CompareLastMember(info));
+						m.Info2 == null &&
+						m.Member.SequenceInfo.CompareMembers(info));
+
+					if (em == null)
+					{
+						em = members.FirstOrDefault(m =>
+							m.Member.SequenceInfo != null &&
+							m.Info2 == null &&
+							m.Member.SequenceInfo.CompareLastMember(info));
+					}
 
 					if (em == null)
 					{
@@ -144,9 +155,10 @@ namespace LinqToDB.Linq.Builder
 
 					if (member.Info1 == null)
 					{
+						var type = members.First(m => m.Info1 != null).Info1.Members.First().GetMemberType();
 						member.Info1 = new SqlInfo(member.Info2.Members)
 						{
-							Sql   = new SqlValue(null),
+							Sql   = new SqlValue(type, null),
 							Query = _sequence1.SelectQuery,
 						};
 
@@ -155,9 +167,12 @@ namespace LinqToDB.Linq.Builder
 
 					if (member.Info2 == null)
 					{
+						var spam = members.First(m => m.Info2 != null).Info2.Members.First();
+						var type = spam.GetMemberType();
+
 						member.Info2 = new SqlInfo(member.Info1.Members)
 						{
-							Sql   = new SqlValue(null),
+							Sql   = new SqlValue(type, null),
 							Query = _sequence2.SelectQuery,
 						};
 					}

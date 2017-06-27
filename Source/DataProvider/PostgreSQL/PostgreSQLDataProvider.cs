@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace LinqToDB.DataProvider.PostgreSQL
 {
@@ -10,6 +11,7 @@ namespace LinqToDB.DataProvider.PostgreSQL
 	using Expressions;
 	using Mapping;
 	using SqlProvider;
+	using Extensions;
 
 	public class PostgreSQLDataProvider : DynamicDataProviderBase
 	{
@@ -37,7 +39,7 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			SqlProviderFlags.IsInsertOrUpdateSupported      = false;
 			SqlProviderFlags.IsUpdateSetTableAliasSupported = false;
 
-			SetCharField("bpchar", (r,i) => r.GetString(i).TrimEnd());
+			SetCharField("bpchar", (r,i) => r.GetString(i).TrimEnd(' '));
 
 			_sqlOptimizer = new PostgreSQLSqlOptimizer(SqlProviderFlags);
 		}
@@ -62,24 +64,34 @@ namespace LinqToDB.DataProvider.PostgreSQL
 		Type _npgsqlDate;
 		Type _npgsqlDateTime;
 
+		CommandBehavior _commandBehavior = CommandBehavior.Default;
+
 		protected override void OnConnectionTypeCreated(Type connectionType)
 		{
-			BitStringType         = connectionType.Assembly.GetType("NpgsqlTypes.BitString",         false);
-			NpgsqlIntervalType    = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlInterval",    false);
-			NpgsqlInetType        = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlInet",        true);
-			NpgsqlTimeType        = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlTime",        false);
-			NpgsqlTimeTZType      = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlTimeTZ",      false);
-			NpgsqlPointType       = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlPoint",       true);
-			NpgsqlLSegType        = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlLSeg",        true);
-			NpgsqlBoxType         = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlBox",         true);
-			NpgsqlPathType        = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlPath",        true);
-			_npgsqlTimeStamp      = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlTimeStamp",   false);
-			_npgsqlTimeStampTZ    = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlTimeStampTZ", false);
-			_npgsqlDate           = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlDate",        true);
-			_npgsqlDateTime       = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlDateTime",    false);
-			NpgsqlMacAddressType  = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlMacAddress",  false);
-			NpgsqlCircleType      = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlCircle",      true);
-			NpgsqlPolygonType     = connectionType.Assembly.GetType("NpgsqlTypes.NpgsqlPolygon",     true);
+			var npgSql = connectionType.AssemblyEx();
+
+			BitStringType         = npgSql.GetType("NpgsqlTypes.BitString",         false);
+			NpgsqlIntervalType    = npgSql.GetType("NpgsqlTypes.NpgsqlInterval",    false);
+			NpgsqlInetType        = npgSql.GetType("NpgsqlTypes.NpgsqlInet",        true);
+			NpgsqlTimeType        = npgSql.GetType("NpgsqlTypes.NpgsqlTime",        false);
+			NpgsqlTimeTZType      = npgSql.GetType("NpgsqlTypes.NpgsqlTimeTZ",      false);
+			NpgsqlPointType       = npgSql.GetType("NpgsqlTypes.NpgsqlPoint",       true);
+			NpgsqlLSegType        = npgSql.GetType("NpgsqlTypes.NpgsqlLSeg",        true);
+			NpgsqlBoxType         = npgSql.GetType("NpgsqlTypes.NpgsqlBox",         true);
+			NpgsqlPathType        = npgSql.GetType("NpgsqlTypes.NpgsqlPath",        true);
+			_npgsqlTimeStamp      = npgSql.GetType("NpgsqlTypes.NpgsqlTimeStamp",   false);
+			_npgsqlTimeStampTZ    = npgSql.GetType("NpgsqlTypes.NpgsqlTimeStampTZ", false);
+			_npgsqlDate           = npgSql.GetType("NpgsqlTypes.NpgsqlDate",        true);
+			_npgsqlDateTime       = npgSql.GetType("NpgsqlTypes.NpgsqlDateTime",    false);
+			NpgsqlMacAddressType  = npgSql.GetType("NpgsqlTypes.NpgsqlMacAddress",  false);
+			NpgsqlCircleType      = npgSql.GetType("NpgsqlTypes.NpgsqlCircle",      true);
+			NpgsqlPolygonType     = npgSql.GetType("NpgsqlTypes.NpgsqlPolygon",     true);
+
+			// https://github.com/linq2db/linq2db/pull/718
+			//if (npgSql.GetName().Version >= new Version(3, 1, 9))
+			//{
+			//	_commandBehavior = CommandBehavior.KeyInfo;
+			//}
 
 			if (BitStringType        != null) SetProviderField(BitStringType,        BitStringType,        "GetBitString");
 			if (NpgsqlIntervalType   != null) SetProviderField(NpgsqlIntervalType,   NpgsqlIntervalType,   "GetInterval");
@@ -108,7 +120,7 @@ namespace LinqToDB.DataProvider.PostgreSQL
 						dataReaderParameter,
 						indexParameter);
 			}
-
+			
 			_setMoney     = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Money");
 			_setVarBinary = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Bytea");
 			_setBoolean   = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Boolean");
@@ -116,7 +128,8 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			_setText      = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Text");
 			_setBit       = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Bit");
 			_setHstore    = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Hstore");
-
+			_setJson      = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Json");
+			_setJsonb     = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Jsonb");
 
 			if (BitStringType        != null) MappingSchema.AddScalarType(BitStringType);
 			if (NpgsqlIntervalType   != null) MappingSchema.AddScalarType(NpgsqlIntervalType);
@@ -160,13 +173,21 @@ namespace LinqToDB.DataProvider.PostgreSQL
 
 			if (_npgsqlDateTime != null)
 			{
-				var p = Expression.Parameter(_npgsqlDateTime, "p");
+				var p  = Expression.Parameter(_npgsqlDateTime, "p");
+				var pi = p.Type.GetPropertyEx("DateTime");
+
+				Expression expr;
+
+				if (pi != null)
+					expr = Expression.Property(p, pi);
+				else
+					expr = Expression.Call(p, "ToDateTime", null);
 
 				MappingSchema.SetConvertExpression(_npgsqlDateTime, typeof(DateTimeOffset),
 					Expression.Lambda(
 						Expression.New(
 							MemberHelper.ConstructorOf(() => new DateTimeOffset(new DateTime())),
-							Expression.PropertyOrField(p, "DateTime")),p));
+							expr),p));
 			}
 		}
 
@@ -186,10 +207,12 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			return _sqlOptimizer;
 		}
 
+#if !NETSTANDARD
 		public override SchemaProvider.ISchemaProvider GetSchemaProvider()
 		{
 			return new PostgreSQLSchemaProvider();
 		}
+#endif 
 
 		static Action<IDbDataParameter> _setMoney;
 		static Action<IDbDataParameter> _setVarBinary;
@@ -198,6 +221,8 @@ namespace LinqToDB.DataProvider.PostgreSQL
 		static Action<IDbDataParameter> _setText;
 		static Action<IDbDataParameter> _setBit;
 		static Action<IDbDataParameter> _setHstore;
+		static Action<IDbDataParameter> _setJsonb;
+		static Action<IDbDataParameter> _setJson;
 
 		public override void SetParameter(IDbDataParameter parameter, string name, DataType dataType, object value)
 		{
@@ -230,8 +255,15 @@ namespace LinqToDB.DataProvider.PostgreSQL
 				case DataType.NText      : _setText     (parameter);                   break;
 				case DataType.BitArray   : _setBit      (parameter);                   break;
 				case DataType.Dictionary : _setHstore(parameter);                      break;
+				case DataType.Json       : _setJson(parameter);                        break;
+				case DataType.BinaryJson : _setJsonb(parameter);                       break;
 				default                  : base.SetParameterType(parameter, dataType); break;
 			}
+		}
+
+		public override CommandBehavior GetCommandBehavior(CommandBehavior commandBehavior)
+		{
+			return commandBehavior | _commandBehavior;
 		}
 
 		#region BulkCopy
@@ -246,6 +278,6 @@ namespace LinqToDB.DataProvider.PostgreSQL
 				source);
 		}
 
-		#endregion
+#endregion
 	}
 }

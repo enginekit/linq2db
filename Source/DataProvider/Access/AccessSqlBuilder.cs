@@ -28,6 +28,7 @@ namespace LinqToDB.DataProvider.Access
 		}
 
 		public override bool IsNestedJoinSupported     { get { return false; } }
+		public override bool WrapJoinCondition         { get { return true;  } }
 
 		#region Skip / Take Support
 
@@ -145,7 +146,7 @@ namespace LinqToDB.DataProvider.Access
 			return new AccessSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
 		}
 
-		protected override bool ParenthesizeJoin()
+		protected override bool ParenthesizeJoin(List<SelectQuery.JoinedTable> tsJoins)
 		{
 			return true;
 		}
@@ -399,6 +400,14 @@ namespace LinqToDB.DataProvider.Access
 			StringBuilder.Append("CONSTRAINT ").Append(pkName).Append(" PRIMARY KEY CLUSTERED (");
 			StringBuilder.Append(fieldNames.Aggregate((f1,f2) => f1 + ", " + f2));
 			StringBuilder.Append(")");
+		}
+
+		public override StringBuilder BuildTableName(StringBuilder sb, string database, string owner, string table)
+		{
+			if (database != null)
+				sb.Append(database).Append(".");
+
+			return sb.Append(table);
 		}
 
 #if !NETFX_CORE && !SILVERLIGHT

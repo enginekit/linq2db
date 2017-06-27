@@ -1,8 +1,35 @@
+﻿DROP TABLE Issue695
+GO
+DROP TABLE Issue695Parent
+GO
 DROP TABLE Patient
 GO
 DROP TABLE Doctor
 GO
 DROP TABLE Person
+GO
+
+DROP TABLE InheritanceParent
+GO
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL CONSTRAINT PK_InheritanceParent PRIMARY KEY,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
+GO
+
+DROP TABLE InheritanceChild
+GO
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL CONSTRAINT PK_InheritanceChild PRIMARY KEY,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL
+)
 GO
 
 -- Person Table
@@ -21,7 +48,10 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
@@ -86,7 +116,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    varbinary(5000) NULL,
 	SmallIntValue  smallint,
 	IntValue       int             NULL,
-	BigIntValue    bigint          NULL
+	BigIntValue    bigint          NULL,
+	StringValue    nvarchar(50)    NULL
 )
 GO
 
@@ -160,4 +191,27 @@ SELECT
 	        1,         2, Cast(3 as varbinary),
 	Cast('6F9619FF-8B86-D011-B42D-00C04FC964FF' as uniqueidentifier)
 
+GO
+
+CREATE TABLE Issue695Parent
+(
+	ID          int NOT NULL 
+			CONSTRAINT PK_Issue695 PRIMARY KEY
+)
+GO
+
+CREATE TABLE Issue695
+(
+	ID          int NOT NULL 
+			CONSTRAINT PK_Issue695 PRIMARY KEY
+			CONSTRAINT FK_Issue695_Parent --FOREIGN KEY
+			REFERENCES Issue695Parent ([ID])
+			ON UPDATE CASCADE
+			ON DELETE CASCADE,
+
+	UniqueValue int NOT NULL
+)
+GO
+
+CREATE UNIQUE INDEX IX_UniqueValue ON Issue695 (UniqueValue)
 GO

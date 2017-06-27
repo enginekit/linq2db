@@ -64,6 +64,31 @@ IF (:MYROWID > 0 ) THEN
 END IF;
 END;;
 
+
+CALL DROPEXISTINGTABLE('InheritanceParent', CURRENT_SCHEMA);;
+
+CREATE TABLE "InheritanceParent"
+(
+	"InheritanceParentId" INTEGER        NOT NULL,
+	"TypeDiscriminator"   INTEGER            NULL,
+	"Name"                NVARCHAR(50)       NULL,
+	
+	PRIMARY KEY ("InheritanceParentId")
+);;
+
+CALL DROPEXISTINGTABLE('InheritanceChild', CURRENT_SCHEMA);;
+
+CREATE TABLE "InheritanceChild"
+(
+	"InheritanceChildId"  INTEGER       NOT NULL,
+	"InheritanceParentId" INTEGER       NOT NULL,
+	"TypeDiscriminator"   INTEGER           NULL,
+	"Name"                NVARCHAR(50)      NULL,
+	
+	PRIMARY KEY ("InheritanceChildId")
+);;
+
+
 CALL DROPEXISTINGTABLE('Doctor', CURRENT_SCHEMA);;
 CALL DROPEXISTINGTABLE('Patient', CURRENT_SCHEMA);;
 CALL DROPEXISTINGTABLE('Person', CURRENT_SCHEMA);;
@@ -79,6 +104,8 @@ CREATE COLUMN TABLE "Person" (
 
 INSERT INTO "Person"("FirstName","LastName","Gender") VALUES ('John',   'Pupkin',    'M');;
 INSERT INTO "Person"("FirstName","LastName","Gender") VALUES ('Tester', 'Testerson', 'M');;
+INSERT INTO "Person"("FirstName","LastName","Gender") VALUES ('Jane',   'Doe',       'F');;
+INSERT INTO "Person"("FirstName","LastName","Gender") VALUES ('Jürgen', 'König',     'M');;
 
 
 CREATE COLUMN TABLE "Doctor"
@@ -281,10 +308,12 @@ CREATE COLUMN TABLE "AllTypes"
 	"timestampDataType" TIMESTAMP NULL,	
 
 	"charDataType" CHAR(1) NULL,
+	"char20DataType" CHAR(20) NULL,
 	"varcharDataType" VARCHAR(20) NULL,
 	"textDataType" TEXT NULL,
 	"shorttextDataType" SHORTTEXT(20) NULL,
 	"ncharDataType" NCHAR(1) NULL,
+	"nchar20DataType" NCHAR(20) NULL,
 	"nvarcharDataType" NVARCHAR(20) NULL,
 	"alphanumDataType" ALPHANUM(20) NULL,
 
@@ -427,7 +456,8 @@ CREATE COLUMN TABLE "LinqDataTypes"
 	"BinaryValue" VARBINARY(5000) NULL,
 	"SmallIntValue" SMALLINT,
 	"IntValue" INTEGER NULL,
-	"BigIntValue" BIGINT NULL
+	"BigIntValue" BIGINT NULL,
+	"StringValue" NVARCHAR(50) NULL
 );;
 
 CALL DROPEXISTINGTABLE('BulkInsertLowerCaseColumns', CURRENT_SCHEMA);;

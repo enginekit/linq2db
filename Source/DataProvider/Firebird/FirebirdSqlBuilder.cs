@@ -35,6 +35,15 @@ namespace LinqToDB.DataProvider.Firebird
 				AppendIndent();
 				StringBuilder.Append("FROM rdb$database").AppendLine();
 			}
+			else if (SelectQuery.Select.IsDistinct)
+			{
+				AppendIndent();
+				StringBuilder.Append("SELECT");
+				BuildSkipFirst();
+				StringBuilder.Append(" DISTINCT");
+				StringBuilder.AppendLine();
+				BuildColumns();
+			}
 			else
 				base.BuildSelectClause();
 		}
@@ -163,8 +172,9 @@ namespace LinqToDB.DataProvider.Firebird
 		{
 			switch (convertType)
 			{
-				case ConvertType.NameToQueryField:
-				case ConvertType.NameToQueryTable:
+				case ConvertType.NameToQueryFieldAlias :
+				case ConvertType.NameToQueryField      :
+				case ConvertType.NameToQueryTable      :
 					if (value != null && IdentifierQuoteMode != FirebirdIdentifierQuoteMode.None)
 					{
 						var name = value.ToString();
@@ -184,12 +194,12 @@ namespace LinqToDB.DataProvider.Firebird
 
 					break;
 
-				case ConvertType.NameToQueryParameter:
+				case ConvertType.NameToQueryParameter  :
 				case ConvertType.NameToCommandParameter:
-				case ConvertType.NameToSprocParameter:
+				case ConvertType.NameToSprocParameter  :
 					return "@" + value;
 
-				case ConvertType.SprocParameterToName:
+				case ConvertType.SprocParameterToName  :
 					if (value != null)
 					{
 						string str = value.ToString();

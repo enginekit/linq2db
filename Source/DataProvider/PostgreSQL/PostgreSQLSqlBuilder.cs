@@ -9,7 +9,7 @@ namespace LinqToDB.DataProvider.PostgreSQL
 	using SqlQuery;
 	using SqlProvider;
 
-	class PostgreSQLSqlBuilder : BasicSqlBuilder
+	public class PostgreSQLSqlBuilder : BasicSqlBuilder
 	{
 		public PostgreSQLSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
 			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
@@ -74,6 +74,8 @@ namespace LinqToDB.DataProvider.PostgreSQL
 					if (type.Type == typeof(string))
 						goto case DataType.NVarChar;
 					break;
+				case DataType.Json           : StringBuilder.Append("json");          break;
+				case DataType.BinaryJson     : StringBuilder.Append("jsonb");         break;
 				default                      : base.BuildDataType(type); break;
 			}
 		}
@@ -82,6 +84,11 @@ namespace LinqToDB.DataProvider.PostgreSQL
 		{
 			if (!SelectQuery.IsUpdate)
 				base.BuildFromClause();
+		}
+
+		protected sealed override bool IsReserved(string word)
+		{
+			return ReservedWords.IsReserved(word, ProviderName.PostgreSQL);
 		}
 
 		public static PostgreSQLIdentifierQuoteMode IdentifierQuoteMode = PostgreSQLIdentifierQuoteMode.Auto;
@@ -103,13 +110,20 @@ namespace LinqToDB.DataProvider.PostgreSQL
 						if (name.Length > 0 && name[0] == '"')
 							return name;
 
-						if (IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Quote ||
-							name
+						if (IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Quote)
+							return '"' + name + '"';
+
+						if (IsReserved(name))
+							return '"' + name + '"';
+
+						if (name
 #if NETFX_CORE
 								.ToCharArray()
 #endif
-								.Any(c => char.IsUpper(c) || char.IsWhiteSpace(c)))
+								.Any(c => char.IsWhiteSpace(c) || (IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Auto && char.IsUpper(c))))
 							return '"' + name + '"';
+
+						
 					}
 
 					break;

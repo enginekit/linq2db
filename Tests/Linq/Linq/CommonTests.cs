@@ -17,7 +17,7 @@ namespace Tests.Linq
 	[TestFixture]
 	public class CommonTests : TestBase
 	{
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2014)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void CheckNullTest(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -204,7 +204,7 @@ namespace Tests.Linq
 		[Test, NorthwindDataContext]
 		public void ExecuteTest(string context)
 		{
-			using (var db = new NorthwindDB())
+			using (var db = new NorthwindDB(context))
 			{
 				var emp = db.Employee;
 

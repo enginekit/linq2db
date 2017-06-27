@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -22,9 +23,9 @@ namespace LinqToDB.Metadata
 			return Array<T>.Empty;
 		}
 
-		static readonly Dictionary<MemberInfo,object> _cache = new Dictionary<MemberInfo,object>();
+		static readonly ConcurrentDictionary<MemberInfo,object> _cache = new ConcurrentDictionary<MemberInfo,object>();
 
-		public T[] GetAttributes<T>(MemberInfo memberInfo, bool inherit)
+		public T[] GetAttributes<T>(Type type, MemberInfo memberInfo, bool inherit)
 			where T : Attribute
 		{
 			if (typeof(T) == typeof(Sql.ExpressionAttribute) && (memberInfo.IsMethodEx() || memberInfo.IsPropertyEx()))
@@ -35,7 +36,7 @@ namespace LinqToDB.Metadata
 				{
 					if (memberInfo.IsMethodEx())
 					{
-						var ma = _reader.GetAttributes<SqlMethodAttribute>(memberInfo);
+						var ma = _reader.GetAttributes<SqlMethodAttribute>(type, memberInfo, inherit);
 
 						if (ma.Length > 0)
 						{
@@ -65,11 +66,11 @@ namespace LinqToDB.Metadata
 					else
 					{
 						var pi = (PropertyInfo)memberInfo;
-						var gm = pi.GetGetMethod();
+						var gm = pi.GetGetMethodEx();
 
 						if (gm != null)
 						{
-							var ma = _reader.GetAttributes<SqlMethodAttribute>(gm);
+							var ma = _reader.GetAttributes<SqlMethodAttribute>(type, gm, inherit);
 
 							if (ma.Length > 0)
 							{

@@ -1,10 +1,37 @@
-DROP TABLE Doctor
+﻿DROP TABLE Doctor
 GO
 
 DROP TABLE Patient
 GO
 
 DROP TABLE Person
+GO
+
+DROP TABLE InheritanceParent
+GO
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL,
+
+	PRIMARY KEY(InheritanceParentId)
+)
+GO
+
+DROP TABLE InheritanceChild
+GO
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                nvarchar(50)     NULL,
+
+	PRIMARY KEY(InheritanceChildId)
+)
 GO
 
 CREATE TABLE Person
@@ -23,15 +50,19 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 GO
-
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+GO
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
 (
 	PersonID int          NOT NULL,
 	Taxonomy nvarchar(50) NOT NULL,
-	FOREIGN KEY (PersonID)
-	REFERENCES Person (PersonID)
+
+	PRIMARY KEY (PersonID),
+	FOREIGN KEY (PersonID) REFERENCES Person (PersonID)
 )
 GO
 
@@ -43,7 +74,10 @@ GO
 CREATE TABLE Patient
 (
 	PersonID  int           NOT NULL,
-	Diagnosis nvarchar(100) NOT NULL
+	Diagnosis nvarchar(100) NOT NULL,
+
+	PRIMARY KEY (PersonID),
+	FOREIGN KEY (PersonID) REFERENCES Person (PersonID)
 )
 GO
 
@@ -80,7 +114,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    byte,
 	SmallIntValue  smallint,
 	IntValue       int,
-	BigIntValue    bigint
+	BigIntValue    bigint,
+	StringValue    NVARCHAR(50)
 )
 GO
 
@@ -112,6 +147,7 @@ CREATE TABLE AllTypes
 	boolDataType     boolean                 NULL,
 
 	charDataType     char(1)                 NULL,
+	char20DataType   char(20)                NULL,
 	varcharDataType  varchar(10)             NULL,
 	ncharDataType    nchar(10)               NULL,
 	nvarcharDataType nvarchar(10)            NULL,

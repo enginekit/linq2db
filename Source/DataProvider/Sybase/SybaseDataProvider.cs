@@ -30,9 +30,12 @@ namespace LinqToDB.DataProvider.Sybase
 			//SqlProviderFlags.IsCountSubQuerySupported  = false;
 			SqlProviderFlags.CanCombineParameters      = false;
 			SqlProviderFlags.IsSybaseBuggyGroupBy      = true;
+			SqlProviderFlags.IsCrossJoinSupported      = false;
 
-			SetCharField("char",  (r,i) => r.GetString(i).TrimEnd());
-			SetCharField("nchar", (r,i) => r.GetString(i).TrimEnd());
+			SetCharField("char",  (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharField("nchar", (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharFieldToType<char>("char",  (r, i) => DataTools.GetChar(r, i));
+			SetCharFieldToType<char>("nchar", (r, i) => DataTools.GetChar(r, i));
 
 			SetProviderField<IDataReader,TimeSpan,DateTime>((r,i) => r.GetDateTime(i) - new DateTime(1900, 1, 1));
 			SetProviderField<IDataReader,DateTime,DateTime>((r,i) => GetDateTime(r, i));
@@ -106,10 +109,12 @@ namespace LinqToDB.DataProvider.Sybase
 			return _sqlOptimizer;
 		}
 
+#if !NETSTANDARD
 		public override ISchemaProvider GetSchemaProvider()
 		{
 			return new SybaseSchemaProvider();
 		}
+#endif
 
 		public override void SetParameter(IDbDataParameter parameter, string name, DataType dataType, object value)
 		{
@@ -179,9 +184,9 @@ namespace LinqToDB.DataProvider.Sybase
 			}
 		}
 
-		#endregion
+#endregion
 
-		#region BulkCopy
+#region BulkCopy
 
 		public override BulkCopyRowsCopied BulkCopy<T>(
 			[JetBrains.Annotations.NotNull] DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
@@ -193,6 +198,6 @@ namespace LinqToDB.DataProvider.Sybase
 				source);
 		}
 
-		#endregion
+#endregion
 	}
 }

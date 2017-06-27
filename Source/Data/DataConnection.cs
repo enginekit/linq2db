@@ -1,30 +1,41 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
 using System.Threading;
-
-using JetBrains.Annotations;
 
 namespace LinqToDB.Data
 {
-	using System.Text;
-
 	using Common;
 	using Configuration;
 	using DataProvider;
-
+	using Expressions;
 	using Mapping;
+#if !SILVERLIGHT && !WINSTORE
+	using RetryPolicy;
+#endif
 
 	public partial class DataConnection : ICloneable
 	{
 		#region .ctor
 
-		public DataConnection() : this(null)
+		public DataConnection() : this((string)null)
+		{}
+
+		public DataConnection([JetBrains.Annotations.NotNull] MappingSchema mappingSchema) : this((string)null)
 		{
+			AddMappingSchema(mappingSchema);
+		}
+
+		public DataConnection(string configurationString, [JetBrains.Annotations.NotNull] MappingSchema mappingSchema)
+			: this(configurationString)
+		{
+			AddMappingSchema(mappingSchema);
 		}
 
 		public DataConnection(string configurationString)
@@ -41,9 +52,25 @@ namespace LinqToDB.Data
 			DataProvider     = ci.DataProvider;
 			ConnectionString = ci.ConnectionString;
 			_mappingSchema   = DataProvider.MappingSchema;
+
+
+#if !SILVERLIGHT && !WINSTORE
+			RetryPolicy = Configuration.RetryPolicy.Factory != null ? Configuration.RetryPolicy.Factory(this) : null;
+#endif
 		}
 
-		public DataConnection([JetBrains.Annotations.NotNull] string providerName, [JetBrains.Annotations.NotNull] string connectionString)
+		public DataConnection(
+				[JetBrains.Annotations.NotNull] string        providerName,
+				[JetBrains.Annotations.NotNull] string        connectionString,
+				[JetBrains.Annotations.NotNull] MappingSchema mappingSchema)
+			: this(providerName, connectionString)
+		{
+			AddMappingSchema(mappingSchema);
+		}
+
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] string providerName,
+			[JetBrains.Annotations.NotNull] string connectionString)
 		{
 			if (providerName     == null) throw new ArgumentNullException("providerName");
 			if (connectionString == null) throw new ArgumentNullException("connectionString");
@@ -60,7 +87,18 @@ namespace LinqToDB.Data
 			_mappingSchema   = DataProvider.MappingSchema;
 		}
 
-		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] string connectionString)
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] string        connectionString,
+			[JetBrains.Annotations.NotNull] MappingSchema mappingSchema)
+			: this(dataProvider, connectionString)
+		{
+			AddMappingSchema(mappingSchema);
+		}
+
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] string connectionString)
 		{
 			if (dataProvider     == null) throw new ArgumentNullException("dataProvider");
 			if (connectionString == null) throw new ArgumentNullException("connectionString");
@@ -72,7 +110,18 @@ namespace LinqToDB.Data
 			ConnectionString = connectionString;
 		}
 
-		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] IDbConnection connection)
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] IDbConnection connection,
+			[JetBrains.Annotations.NotNull] MappingSchema mappingSchema)
+			: this(dataProvider, connection)
+		{
+			AddMappingSchema(mappingSchema);
+		}
+
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] IDbConnection connection)
 		{
 			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
 			if (connection   == null) throw new ArgumentNullException("connection");
@@ -88,7 +137,18 @@ namespace LinqToDB.Data
 			_connection    = connection;
 		}
 
-		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] IDbTransaction transaction)
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] IDbTransaction transaction,
+			[JetBrains.Annotations.NotNull] MappingSchema mappingSchema)
+			: this(dataProvider, transaction)
+		{
+			AddMappingSchema(mappingSchema);
+		}
+
+		public DataConnection(
+			[JetBrains.Annotations.NotNull] IDataProvider dataProvider,
+			[JetBrains.Annotations.NotNull] IDbTransaction transaction)
 		{
 			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
 			if (transaction  == null) throw new ArgumentNullException("transaction");
@@ -113,6 +173,9 @@ namespace LinqToDB.Data
 		public string        ConfigurationString { get; private set; }
 		public IDataProvider DataProvider        { get; private set; }
 		public string        ConnectionString    { get; private set; }
+#if !SILVERLIGHT && !WINSTORE
+		public IRetryPolicy  RetryPolicy         { get; set; }
+#endif
 
 		static readonly ConcurrentDictionary<string,int> _configurationIDs;
 		static int _maxID;
@@ -170,35 +233,67 @@ namespace LinqToDB.Data
 
 		static void OnTraceInternal(TraceInfo info)
 		{
-			if (info.BeforeExecute)
+			switch (info.TraceInfoStep)
 			{
-				WriteTraceLine(info.SqlText, TraceSwitch.DisplayName);
-			}
-			else if (info.TraceLevel == TraceLevel.Error)
-			{
-				var sb = new StringBuilder();
+				case TraceInfoStep.BeforeExecute:
+					WriteTraceLine(info.SqlText, TraceSwitch.DisplayName);
+					break;
 
-				for (var ex = info.Exception; ex != null; ex = ex.InnerException)
+				case TraceInfoStep.AfterExecute:
+					WriteTraceLine(
+						info.RecordsAffected != null
+							? "Query Execution Time: {0}. Records Affected: {1}.\r\n".Args(info.ExecutionTime, info.RecordsAffected)
+							: "Query Execution Time: {0}\r\n".Args(info.ExecutionTime),
+						TraceSwitch.DisplayName);
+					break;
+
+				case TraceInfoStep.Error:
 				{
-					sb
-						.AppendLine()
-						.AppendFormat("Exception: {0}", ex.GetType())
-						.AppendLine()
-						.AppendFormat("Message  : {0}", ex.Message)
-						.AppendLine()
-						.AppendLine(ex.StackTrace)
-						;
+					var sb = new StringBuilder();
+
+					for (var ex = info.Exception; ex != null; ex = ex.InnerException)
+					{
+						sb
+							.AppendLine()
+							.AppendLine("Exception: {0}".Args(ex.GetType()))
+							.AppendLine("Message  : {0}".Args(ex.Message))
+							.AppendLine(ex.StackTrace)
+							;
+					}
+
+					WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+					
 				}
 
-				WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
-			}
-			else if (info.RecordsAffected != null)
-			{
-				WriteTraceLine("Execution time: {0}. Records affected: {1}.\r\n".Args(info.ExecutionTime, info.RecordsAffected), TraceSwitch.DisplayName);
-			}
-			else
-			{
-				WriteTraceLine("Execution time: {0}\r\n".Args(info.ExecutionTime), TraceSwitch.DisplayName);
+					break;
+
+				case TraceInfoStep.MapperCreated:
+				{
+					var sb = new StringBuilder();
+
+					if (Configuration.Linq.TraceMapperExpression && info.MapperExpression != null)
+						sb.AppendLine(info.MapperExpression.GetDebugView());
+
+					WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+				}
+
+					break;
+
+				case TraceInfoStep.Completed:
+				{
+					var sb = new StringBuilder();
+
+					sb.Append("Total Execution Time: {0}.".Args(info.ExecutionTime));
+
+					if (info.RecordsAffected != null)
+						sb.Append(" Rows Count: {0}.".Args(info.RecordsAffected));
+
+					sb.AppendLine();
+
+					WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+				}
+
+					break;
 			}
 		}
 
@@ -225,11 +320,31 @@ namespace LinqToDB.Data
 
 		public static Action<string,string> WriteTraceLine = (message, displayName) => Debug.WriteLine(message, displayName);
 
-		#endregion
+#endregion
 
-		#region Configuration
+#region Configuration
 
-		static IDataProvider FindProvider(string configuration, IEnumerable<KeyValuePair<string,IDataProvider>> ps, IDataProvider defp)
+		private static ILinqToDBSettings _defaultSettings;
+
+		public static ILinqToDBSettings DefaultSettings
+		{
+			get
+			{
+#if !NETSTANDARD
+				return _defaultSettings ?? (_defaultSettings = LinqToDBSection.Instance);
+#else
+				return _defaultSettings;
+#endif
+
+			}
+			set { _defaultSettings = value; }
+		}
+
+		[SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
+		private static IDataProvider FindProvider(
+			string configuration,
+			IEnumerable<KeyValuePair<string,IDataProvider>> ps,
+			IDataProvider defp)
 		{
 			foreach (var p in ps.OrderByDescending(kv => kv.Key.Length))
 				if (configuration == p.Key || configuration.StartsWith(p.Key + '.'))
@@ -247,7 +362,9 @@ namespace LinqToDB.Data
 			_configurationIDs = new ConcurrentDictionary<string,int>();
 
 			LinqToDB.DataProvider.SqlServer. SqlServerTools. GetDataProvider();
+#if !NETSTANDARD
 			LinqToDB.DataProvider.Access.    AccessTools.    GetDataProvider();
+#endif
 			LinqToDB.DataProvider.SqlCe.     SqlCeTools.     GetDataProvider();
 			LinqToDB.DataProvider.Firebird.  FirebirdTools.  GetDataProvider();
 			LinqToDB.DataProvider.MySql.     MySqlTools.     GetDataProvider();
@@ -259,14 +376,14 @@ namespace LinqToDB.Data
 			LinqToDB.DataProvider.Informix.  InformixTools.  GetDataProvider();
 			LinqToDB.DataProvider.SapHana.   SapHanaTools.   GetDataProvider(); 
 
-			var section = LinqToDBSection.Instance;
+			var section = DefaultSettings;
 
 			if (section != null)
 			{
 				DefaultConfiguration = section.DefaultConfiguration;
 				DefaultDataProvider  = section.DefaultDataProvider;
 
-				foreach (DataProviderElement provider in section.DataProviders)
+				foreach (var provider in section.DataProviders)
 				{
 					var dataProviderType = Type.GetType(provider.TypeName, true);
 					var providerInstance = (IDataProviderFactory)Activator.CreateInstance(dataProviderType);
@@ -277,49 +394,42 @@ namespace LinqToDB.Data
 			}
 		}
 
-		static readonly List<Func<ConnectionStringSettings,IDataProvider>> _providerDetectors =
-			new List<Func<ConnectionStringSettings,IDataProvider>>();
+		static readonly List<Func<IConnectionStringSettings,string,IDataProvider>> _providerDetectors =
+			new List<Func<IConnectionStringSettings,string,IDataProvider>>();
 
-		public static void AddProviderDetector(Func<ConnectionStringSettings,IDataProvider> providerDetector)
+		public static void AddProviderDetector(Func<IConnectionStringSettings,string,IDataProvider> providerDetector)
 		{
 			_providerDetectors.Add(providerDetector);
 		}
 
-		internal static bool IsMachineConfig(ConnectionStringSettings css)
-		{
-			string source;
-
-			try
-			{
-				source = css.ElementInformation.Source;
-			}
-			catch (Exception)
-			{
-				source = "";
-			}
-
-			return source == null || source.EndsWith("machine.config", StringComparison.OrdinalIgnoreCase);
-		}
-
 		static void InitConnectionStrings()
 		{
-			foreach (ConnectionStringSettings css in ConfigurationManager.ConnectionStrings)
+			if (DefaultSettings == null)
+				return;
+			foreach (var css in DefaultSettings.ConnectionStrings)
 			{
 				_configurations[css.Name] = new ConfigurationInfo(css);
 
-				if (DefaultConfiguration == null && !IsMachineConfig(css))
+				if (DefaultConfiguration == null && !css.IsGlobal /*IsMachineConfig(css)*/)
 				{
 					DefaultConfiguration = css.Name;
 				}
 			}
 		}
 
-		static int _isInitialized;
+		static readonly object _initSyncRoot = new object();
+		static          bool   _initialized;
 
 		static void InitConfig()
 		{
-			if (Interlocked.Exchange(ref _isInitialized, 1) == 0)
-				InitConnectionStrings();
+			lock (_initSyncRoot)
+			{
+				if (!_initialized)
+				{
+					_initialized = true;
+					InitConnectionStrings();
+				}
+			}
 		}
 
 		static readonly ConcurrentDictionary<string,IDataProvider> _dataProviders =
@@ -352,35 +462,47 @@ namespace LinqToDB.Data
 
 		class ConfigurationInfo
 		{
+			private readonly bool _dataProviderSetted;
 			public ConfigurationInfo(string connectionString, IDataProvider dataProvider)
 			{
-				ConnectionString = connectionString;
-				DataProvider     = dataProvider;
+				ConnectionString    = connectionString;
+				_dataProvider       = dataProvider;
+				_dataProviderSetted = dataProvider != null;
 			}
 
-			public ConfigurationInfo(ConnectionStringSettings connectionStringSettings)
+			public ConfigurationInfo(IConnectionStringSettings connectionStringSettings)
 			{
 				ConnectionString = connectionStringSettings.ConnectionString;
 
 				_connectionStringSettings = connectionStringSettings;
 			}
 
-			public  string ConnectionString;
+			private string _connectionString;
+			public  string ConnectionString
+			{
+				get { return _connectionString; }
+				set
+				{
+					if (!_dataProviderSetted)
+						_dataProvider = null;
 
-			private readonly ConnectionStringSettings _connectionStringSettings;
+					_connectionString = value;
+				}
+			}
+
+			private readonly IConnectionStringSettings _connectionStringSettings;
 
 			private IDataProvider _dataProvider;
 			public  IDataProvider  DataProvider
 			{
-				get { return _dataProvider ?? (_dataProvider = GetDataProvider(_connectionStringSettings)); }
-				set { _dataProvider = value; }
+				get { return _dataProvider ?? (_dataProvider = GetDataProvider(_connectionStringSettings, ConnectionString)); }
 			}
 
-			static IDataProvider GetDataProvider(ConnectionStringSettings css)
+			static IDataProvider GetDataProvider(IConnectionStringSettings css, string connectionString)
 			{
 				var configuration = css.Name;
 				var providerName  = css.ProviderName;
-				var dataProvider  = _providerDetectors.Select(d => d(css)).FirstOrDefault(dp => dp != null);
+				var dataProvider  = _providerDetectors.Select(d => d(css, connectionString)).FirstOrDefault(dp => dp != null);
 
 				if (dataProvider == null)
 				{
@@ -405,7 +527,7 @@ namespace LinqToDB.Data
 					}
 				}
 
-				if (dataProvider != null && DefaultConfiguration == null && !IsMachineConfig(css))
+				if (dataProvider != null && DefaultConfiguration == null && !css.IsGlobal/*IsMachineConfig(css)*/)
 				{
 					DefaultConfiguration = css.Name;
 				}
@@ -418,19 +540,24 @@ namespace LinqToDB.Data
 		{
 			ConfigurationInfo ci;
 
-			if (_configurations.TryGetValue(configurationString ?? DefaultConfiguration, out ci))
+			var key = configurationString ?? DefaultConfiguration;
+
+			if (key == null)
+				throw new LinqToDBException("Configuration string is not provided.");
+
+			if (_configurations.TryGetValue(key, out ci))
 				return ci;
 
 			throw new LinqToDBException("Configuration '{0}' is not defined.".Args(configurationString));
 		}
 
-		public static void SetConnectionStrings(System.Configuration.Configuration config)
+		public static void SetConnectionStrings(IEnumerable<IConnectionStringSettings> connectionStrings)
 		{
-			foreach (ConnectionStringSettings css in config.ConnectionStrings.ConnectionStrings)
+			foreach (var css in connectionStrings)
 			{
 				_configurations[css.Name] = new ConfigurationInfo(css);
 
-				if (DefaultConfiguration == null && !IsMachineConfig(css))
+				if (DefaultConfiguration == null && !css.IsGlobal /*IsMachineConfig(css)*/)
 				{
 					DefaultConfiguration = css.Name;
 				}
@@ -465,7 +592,7 @@ namespace LinqToDB.Data
 			_configurations[configuration].ConnectionString = connectionString;
 		}
 
-		[Pure]
+		[JetBrains.Annotations.Pure]
 		public static string GetConnectionString(string configurationString)
 		{
 			InitConfig();
@@ -478,9 +605,9 @@ namespace LinqToDB.Data
 			throw new LinqToDBException("Configuration '{0}' is not defined.".Args(configurationString));
 		}
 
-		#endregion
+#endregion
 
-		#region Connection
+#region Connection
 
 		bool          _closeConnection;
 		bool          _closeTransaction;
@@ -491,10 +618,17 @@ namespace LinqToDB.Data
 			get
 			{
 				if (_connection == null)
+				{
 					_connection = DataProvider.CreateConnection(ConnectionString);
 
+#if !SILVERLIGHT && !WINSTORE
+					if (RetryPolicy != null)
+						_connection = new RetryingDbConnection(this, (DbConnection)_connection, RetryPolicy);
+#endif
+				}
+
 				if (_connection.State == ConnectionState.Closed)
-				{
+				{ 
 					_connection.Open();
 					_closeConnection = true;
 				}
@@ -529,9 +663,9 @@ namespace LinqToDB.Data
 				OnClosed(this, EventArgs.Empty);
 		}
 
-		#endregion
+#endregion
 
-		#region Command
+#region Command
 
 		public string LastQuery;
 
@@ -586,17 +720,13 @@ namespace LinqToDB.Data
 
 		internal int ExecuteNonQuery()
 		{
-			if (TraceSwitch.Level == TraceLevel.Off)
-				return Command.ExecuteNonQuery();
-
-			if (OnTraceConnection == null)
+			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
 				return Command.ExecuteNonQuery();
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
 					Command        = Command,
@@ -611,7 +741,7 @@ namespace LinqToDB.Data
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel      = TraceLevel.Info,
 						DataConnection  = this,
@@ -627,7 +757,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,
@@ -643,20 +773,16 @@ namespace LinqToDB.Data
 
 		object ExecuteScalar()
 		{
-			if (TraceSwitch.Level == TraceLevel.Off)
-				return Command.ExecuteScalar();
-
-			if (OnTraceConnection == null)
+			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
 				return Command.ExecuteScalar();
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
-					Command        = Command,
+					Command        = Command
 				});
 			}
 
@@ -668,7 +794,7 @@ namespace LinqToDB.Data
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel     = TraceLevel.Info,
 						DataConnection = this,
@@ -683,7 +809,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,
@@ -697,24 +823,20 @@ namespace LinqToDB.Data
 			}
 		}
 
-		internal IDataReader ExecuteReader()
+		private IDataReader ExecuteReader()
 		{
-			return ExecuteReader(CommandBehavior.Default);
+			return ExecuteReader(GetCommandBehavior(CommandBehavior.Default));
 		}
 
 		internal IDataReader ExecuteReader(CommandBehavior commandBehavior)
 		{
-			if (TraceSwitch.Level == TraceLevel.Off)
-				return Command.ExecuteReader(commandBehavior);
-
-			if (OnTraceConnection == null)
-				return Command.ExecuteReader(commandBehavior);
+			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
+				return Command.ExecuteReader(GetCommandBehavior(CommandBehavior.Default));
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
 					Command        = Command,
@@ -725,11 +847,11 @@ namespace LinqToDB.Data
 
 			try
 			{
-				var ret = Command.ExecuteReader(commandBehavior);
+				var ret = Command.ExecuteReader(GetCommandBehavior(CommandBehavior.Default));
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel     = TraceLevel.Info,
 						DataConnection = this,
@@ -744,7 +866,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,
@@ -763,9 +885,9 @@ namespace LinqToDB.Data
 			CommandInfo.ClearObjectReaderCache();
 		}
 
-		#endregion
+#endregion
 
-		#region Transaction
+#region Transaction
 
 		public IDbTransaction Transaction { get; private set; }
 		
@@ -821,6 +943,9 @@ namespace LinqToDB.Data
 				{
 					Transaction.Dispose();
 					Transaction = null;
+
+					if (_command != null)
+						_command.Transaction = null;
 				}
 			}
 		}
@@ -835,13 +960,16 @@ namespace LinqToDB.Data
 				{
 					Transaction.Dispose();
 					Transaction = null;
+
+					if (_command != null)
+						_command.Transaction = null;
 				}
 			}
 		}
 
-		#endregion
+#endregion
 
-		#region MappingSchema
+#region MappingSchema
 
 		private MappingSchema _mappingSchema;
 
@@ -872,9 +1000,9 @@ namespace LinqToDB.Data
 			return this;
 		}
 
-		#endregion
+#endregion
 
-		#region ICloneable Members
+#region ICloneable Members
 
 		DataConnection(string configurationString, IDataProvider dataProvider, string connectionString, IDbConnection connection, MappingSchema mappingSchema)
 		{
@@ -896,15 +1024,29 @@ namespace LinqToDB.Data
 			return new DataConnection(ConfigurationString, DataProvider, ConnectionString, connection, MappingSchema);
 		}
 		
-		#endregion
+#endregion
 
-		#region System.IDisposable Members
+#region System.IDisposable Members
+
+		protected bool Disposed { get; private set; }
+
+		protected void ThrowOnDisposed()
+		{
+			if (Disposed)
+				throw new ObjectDisposedException("DataConnection", "IDataContext is disposed, see https://github.com/linq2db/linq2db/wiki/Managing-data-connection");
+		}
 
 		public void Dispose()
 		{
+			Disposed = true;
 			Close();
 		}
 
-		#endregion
+#endregion
+
+		internal CommandBehavior GetCommandBehavior(CommandBehavior commandBehavior)
+		{
+			return DataProvider.GetCommandBehavior(commandBehavior);
+		}
 	}
 }

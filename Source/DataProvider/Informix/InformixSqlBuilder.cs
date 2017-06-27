@@ -6,6 +6,7 @@ using System.Text;
 
 namespace LinqToDB.DataProvider.Informix
 {
+	using Common;
 	using SqlQuery;
 	using SqlProvider;
 
@@ -40,6 +41,11 @@ namespace LinqToDB.DataProvider.Informix
 				.Replace("NULL IS NULL",     "1=1");
 		}
 
+//		protected override bool ParenthesizeJoin(List<SelectQuery.JoinedTable> joins)
+//		{
+//			return joins.Any(j => j.JoinType == SelectQuery.JoinType.Inner && j.Condition.Conditions.IsNullOrEmpty());
+//		}
+
 		protected override void BuildSelectClause()
 		{
 			if (SelectQuery.From.Tables.Count == 0)
@@ -47,6 +53,15 @@ namespace LinqToDB.DataProvider.Informix
 				AppendIndent().Append("SELECT FIRST 1").AppendLine();
 				BuildColumns();
 				AppendIndent().Append("FROM SYSTABLES").AppendLine();
+			}
+			else if (SelectQuery.Select.IsDistinct)
+			{
+				AppendIndent();
+				StringBuilder.Append("SELECT");
+				BuildSkipFirst();
+				StringBuilder.Append(" DISTINCT");
+				StringBuilder.AppendLine();
+				BuildColumns();
 			}
 			else
 				base.BuildSelectClause();

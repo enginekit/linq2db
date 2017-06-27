@@ -1,4 +1,4 @@
--- Cleanup schema
+﻿-- Cleanup schema
 
 DROP SEQUENCE PersonSeq
 /
@@ -22,6 +22,8 @@ DROP TABLE Child
 /
 DROP TABLE Parent
 /
+DROP TABLE StringTest
+/
 DROP TABLE LinqDataTypes
 /
 DROP SEQUENCE SequenceTestSeq
@@ -41,6 +43,43 @@ DROP sequence sq_test_user_contract
 DROP table t_entity
 /
 
+--StringTest Table
+CREATE TABLE StringTest
+	( StringValue1                VARCHAR2(50) NULL
+	, StringValue2                CHAR(50)     NULL
+	, KeyValue                    VARCHAR2(50) NOT NULL
+	)
+/
+
+INSERT INTO StringTest (StringValue1, StringValue2, KeyValue) VALUES ('Value1', 'Value2', 'HasValues')
+/
+INSERT INTO StringTest (StringValue1, StringValue2, KeyValue) VALUES (null,     null,     'NullValues')
+/
+
+-- Inheritance Parent/Child
+
+DROP TABLE InheritanceParent
+/
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId NUMBER        NOT NULL PRIMARY KEY,
+	TypeDiscriminator   NUMBER            NULL,
+	Name                NVARCHAR2(50)     NULL
+)
+/
+
+DROP TABLE InheritanceChild
+/
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  NUMBER        NOT NULL PRIMARY KEY,
+	InheritanceParentId NUMBER        NOT NULL,
+	TypeDiscriminator   NUMBER            NULL,
+	Name                NVARCHAR2(50)     NULL
+)
+/
 
 -- Person Table
 
@@ -102,9 +141,13 @@ INSERT INTO Person  (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',   
 /
 INSERT INTO Person  (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
 /
-INSERT INTO Doctor  (PersonID,  Taxonomy)  VALUES (PersonSeq.CURRVAL, 'Psychiatry')
+INSERT INTO Person  (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
 /
-INSERT INTO Patient (PersonID,  Diagnosis) VALUES (PersonSeq.CURRVAL, 'Hallucination with Paranoid Bugs'' Delirium of Persecution')
+INSERT INTO Person  (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+/
+INSERT INTO Doctor  (PersonID,  Taxonomy)  VALUES (1, 'Psychiatry')
+/
+INSERT INTO Patient (PersonID,  Diagnosis) VALUES (2, 'Hallucination with Paranoid Bugs'' Delirium of Persecution')
 /
 
 -- Person_Delete
@@ -580,7 +623,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    blob         NULL,
 	SmallIntValue  smallint,
 	IntValue       int          NULL,
-	BigIntValue    number(20,0) NULL
+	BigIntValue    number(20,0) NULL,
+	StringValue    VARCHAR2(50) NULL
 )
 /
 
@@ -687,6 +731,7 @@ CREATE TABLE AllTypes
 	localZoneDataType        timestamp with local time zone NULL,
 
 	charDataType             char(1)                        NULL,
+	char20DataType           char(20)                       NULL,
 	varcharDataType          varchar2(20)                   NULL,
 	textDataType             clob                           NULL,
 	ncharDataType            nchar(20)                      NULL,

@@ -1084,7 +1084,7 @@ namespace Tests.Linq
 		[Test, NorthwindDataContext]
 		public void GrooupByAssociation3(string context)
 		{
-			using (var db = new NorthwindDB())
+			using (var db = new NorthwindDB(context))
 			{
 				var result = 
 					from p in db.Product
@@ -1100,7 +1100,7 @@ namespace Tests.Linq
 		[Test, NorthwindDataContext]
 		public void GrooupByAssociation4(string context)
 		{
-			using (var db = new NorthwindDB())
+			using (var db = new NorthwindDB(context))
 			{
 				var result = 
 					from p in db.Product
@@ -1160,16 +1160,19 @@ namespace Tests.Linq
 		[Test, NorthwindDataContext]
 		public void GroupByAggregate2(string context)
 		{
-			using (var db = new NorthwindDB())
+			using (var db = new NorthwindDB(context))
+			{
+				var dd = GetNorthwindAsList(context);
 				AreEqual(
 					(
-						from c in Customer
+						from c in dd.Customer
 						group c by c.Orders.Count > 0 && c.Orders.Average(o => o.Freight) >= 80
 					).ToList().Select(k => k.Key),
 					(
 						from c in db.Customer
 						group c by c.Orders.Average(o => o.Freight) >= 80
 					).ToList().Select(k => k.Key));
+			}
 		}
 
 		[Test, DataContextSource(ProviderName.SqlCe)]
@@ -1606,7 +1609,7 @@ namespace Tests.Linq
 			}
 		}
 
-		// TODO: [Test, DataContextSource]
+		[Test, DataContextSource]
 		public void GroupByDate1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -1631,7 +1634,7 @@ namespace Tests.Linq
 			}
 		}
 
-		// TODO: [Test, DataContextSource]
+		[Test, DataContextSource]
 		public void GroupByDate2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -1652,6 +1655,31 @@ namespace Tests.Linq
 						Total = grp.Sum(_ => _.MoneyValue),
 						year  = grp.Key.Year,
 						month = grp.Key.Month
+					});
+			}
+		}
+
+		[Test, DataContextSource]
+		public void GroupByDate3(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(
+					from t in Types2
+					group t by new { Date = Sql.MakeDateTime(t.DateTimeValue.Value.Year, t.DateTimeValue.Value.Month, 1) }   into grp
+					select new
+					{
+						Total = grp.Sum(_ => _.MoneyValue),
+						year  = grp.Key.Date.Value.Year,
+						month = grp.Key.Date.Value.Month
+					},
+					from t in db.Types2
+					group t by new { Date = Sql.MakeDateTime(t.DateTimeValue.Value.Year, t.DateTimeValue.Value.Month, 1) } into grp
+					select new
+					{
+						Total = grp.Sum(_ => _.MoneyValue),
+						year  = grp.Key.Date.Value.Year,
+						month = grp.Key.Date.Value.Month
 					});
 			}
 		}
@@ -1691,8 +1719,7 @@ namespace Tests.Linq
 		[Test, DataContextSource]
 		public void FirstGroupBy(string context)
 		{
-			LinqToDB.Common.Configuration.Linq.AllowMultipleQuery = true;
-
+			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 			{
 				Assert.AreEqual(
@@ -1782,6 +1809,97 @@ namespace Tests.Linq
 					{
 						Count = g.Count()
 					});
+			}
+		}
+
+		[Test, DataContextSource(ProviderName.Access)]
+		public void JoinGroupBy1(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(
+					from c in Child
+					from g in c.GrandChildren
+					group c by g.ParentID into gc
+					select gc.Key
+					,
+					from c in db.Child
+					from g in c.GrandChildren
+					group c by g.ParentID into gc
+					select gc.Key
+				);
+			}
+		}
+
+		[Test, DataContextSource(ProviderName.Access)]
+		public void JoinGroupBy2(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(
+					from c in Child
+					from g in c.Parent.Children
+					group g by g.ParentID into gc
+					select gc.Key
+					,
+					from c in db.Child
+					from g in c.Parent.Children
+					group g by g.ParentID into gc
+					select gc.Key
+				);
+			}
+		}
+
+		[Test, DataContextSource]
+		public void GroupByGuard(string context)
+		{
+			using(new AllowMultipleQuery())
+			using(new GuardGrouping())
+			using (var db = GetDataContext(context))
+			{
+				// group on client
+				var dictionary1 = db.Person
+					.AsEnumerable()
+					.GroupBy(_ => _.Gender)
+					.ToDictionary(_ => _.Key, _ => _.ToList());
+
+				var dictionary2 = Person
+					.AsEnumerable()
+					.GroupBy(_ => _.Gender)
+					.ToDictionary(_ => _.Key, _ => _.ToList());
+
+				Assert.AreEqual(dictionary2.Count,               dictionary1.Count);
+				Assert.AreEqual(dictionary2.First().Value.Count, dictionary1.First().Value.Count);
+
+				var list =
+				(
+					from p in db.Person
+					group p by p.Gender into gr
+					select new { gr.Key, Count = gr.Count() }
+				)
+				.ToDictionary(_ => _.Key);
+
+				Assert.Throws<LinqToDBException>(() =>
+				{
+					// group on server
+					db.Person
+						.GroupBy(_ => _.Gender)
+						.ToDictionary(_ => _.Key, _ => _.ToList());
+				});
+
+				Assert.Throws<LinqToDBException>(() =>
+				{
+					db.Person
+						.GroupBy(_ => _)
+						.ToDictionary(_ => _.Key, _ => _.ToList());
+				});
+
+				Assert.Throws<LinqToDBException>(() =>
+				{
+					db.Person
+						.GroupBy(_ => _)
+						.ToList();
+				});
 			}
 		}
 	}

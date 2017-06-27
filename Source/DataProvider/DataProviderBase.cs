@@ -4,10 +4,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Data.Linq;
-using System.Diagnostics;
 using System.IO;
 using System.Linq.Expressions;
-using System.Reflection;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -42,6 +40,9 @@ namespace LinqToDB.DataProvider
 				IsGroupByExpressionSupported   = true,
 				IsDistinctOrderBySupported     = true,
 				IsUpdateSetTableAliasSupported = true,
+				TakeHintsSupported             = null,
+				IsCrossJoinSupported           = true,
+				IsInnerJoinAsCrossSupported    = true
 			};
 
 			SetField<IDataReader,bool>    ((r,i) => r.GetBoolean (i));
@@ -57,11 +58,22 @@ namespace LinqToDB.DataProvider
 			SetField<IDataReader,DateTime>((r,i) => r.GetDateTime(i));
 			SetField<IDataReader,Guid>    ((r,i) => r.GetGuid    (i));
 			SetField<IDataReader,byte[]>  ((r,i) => (byte[])r.GetValue(i));
+
+			MaxRetryCount = DefaultMaxRetryCount;
 		}
 
 		#endregion
 
 		#region Public Members
+		/// <summary>
+		///   The default number of retry attempts.
+		/// </summary>
+		protected static readonly int DefaultMaxRetryCount = 5;
+
+		/// <summary>
+		///     The maximum number of retry attempts.
+		/// </summary>
+		protected virtual int MaxRetryCount { get; private set; }
 
 		public          string           Name                { get; private set; }
 		public abstract string           ConnectionNamespace { get; }
@@ -105,6 +117,11 @@ namespace LinqToDB.DataProvider
 			return null;
 		}
 
+		public virtual CommandBehavior GetCommandBehavior(CommandBehavior commandBehavior)
+		{
+			return commandBehavior;
+		}
+
 		#endregion
 
 		#region Helpers
@@ -114,6 +131,11 @@ namespace LinqToDB.DataProvider
 		protected void SetCharField(string dataTypeName, Expression<Func<IDataReader,int,string>> expr)
 		{
 			ReaderExpressions[new ReaderInfo { FieldType = typeof(string), DataTypeName = dataTypeName }] = expr;
+		}
+
+		protected void SetCharFieldToType<T>(string dataTypeName, Expression<Func<IDataReader, int, string>> expr)
+		{
+			ReaderExpressions[new ReaderInfo { ToType = typeof(T), FieldType = typeof(string), DataTypeName = dataTypeName }] = expr;
 		}
 
 		protected void SetField<TP,T>(Expression<Func<TP,int,T>> expr)
@@ -141,11 +163,14 @@ namespace LinqToDB.DataProvider
 			ReaderExpressions[new ReaderInfo { ToType = typeof(T), FieldType = typeof(TF) }] = expr;
 		}
 
+		protected virtual string NormalizeTypeName(string typeName)
+		{
+			return typeName;
+		}
+
 		#endregion
 
 		#region GetReaderExpression
-
-		static readonly MethodInfo _getValueMethodInfo = MemberHelper.MethodOf<IDataReader>(r => r.GetValue(0));
 
 		public virtual Expression GetReaderExpression(MappingSchema mappingSchema, IDataReader reader, int idx, Expression readerExpression, Type toType)
 		{
@@ -160,6 +185,8 @@ namespace LinqToDB.DataProvider
 					providerType,
 					((DbDataReader)reader).GetName(idx)));
 			}
+
+			typeName = NormalizeTypeName(typeName);
 
 #if DEBUG1
 			Debug.WriteLine("ToType                ProviderFieldType     FieldType             DataTypeName          Expression");
@@ -198,12 +225,13 @@ namespace LinqToDB.DataProvider
 			    FindExpression(new ReaderInfo {                                                    FieldType = fieldType                          }, out expr))
 				return expr;
 
+			var getValueMethodInfo = MemberHelper.MethodOf<IDataReader>(r => r.GetValue(0));
 			return Expression.Convert(
-				Expression.Call(readerExpression, _getValueMethodInfo, Expression.Constant(idx)),
+				Expression.Call(readerExpression, getValueMethodInfo, Expression.Constant(idx)),
 				fieldType);
 		}
 
-		bool FindExpression(ReaderInfo info, out Expression expr)
+		protected bool FindExpression(ReaderInfo info, out Expression expr)
 		{
 #if DEBUG1
 				Debug.WriteLine("{0,-21} {1,-21} {2,-21} {3,-21}"
@@ -227,8 +255,12 @@ namespace LinqToDB.DataProvider
 
 		public virtual bool? IsDBNullAllowed(IDataReader reader, int idx)
 		{
+#if !NETSTANDARD
 			var st = ((DbDataReader)reader).GetSchemaTable();
-			return st == null || (bool)st.Rows[idx]["AllowDBNull"];
+			return st == null || st.Rows[idx].IsNull("AllowDBNull") || (bool)st.Rows[idx]["AllowDBNull"];
+#else
+			return true;
+#endif
 		}
 
 		#endregion
@@ -320,7 +352,9 @@ namespace LinqToDB.DataProvider
 		}
 
 		public abstract bool            IsCompatibleConnection(IDbConnection connection);
+#if !NETSTANDARD
 		public abstract ISchemaProvider GetSchemaProvider     ();
+#endif
 
 		protected virtual void SetParameterType(IDbDataParameter parameter, DataType dataType)
 		{
@@ -360,7 +394,7 @@ namespace LinqToDB.DataProvider
 			parameter.DbType = dbType;
 		}
 
-		#endregion
+#endregion
 
 		#region Create/Drop Database
 
@@ -405,26 +439,30 @@ namespace LinqToDB.DataProvider
 			}
 		}
 
-		#endregion
+#endregion
 
 		#region BulkCopy
-
 		public virtual BulkCopyRowsCopied BulkCopy<T>(DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
 		{
 			return new BasicBulkCopy().BulkCopy(options.BulkCopyType, dataConnection, options, source);
 		}
-
 		#endregion
 
 		#region Merge
-
 		public virtual int Merge<T>(DataConnection dataConnection, Expression<Func<T,bool>> deletePredicate, bool delete, IEnumerable<T> source,
 			string tableName, string databaseName, string schemaName)
 			where T : class
 		{
 			return new BasicMerge().Merge(dataConnection, deletePredicate, delete, source, tableName, databaseName, schemaName);
 		}
-
 		#endregion
+
+		//public virtual TimeSpan? ShouldRetryOn(Exception exception, int retryCount, TimeSpan baseDelay)
+		//{
+		//	return
+		//		retryCount <= MaxRetryCount && exception is TimeoutException
+		//			? baseDelay
+		//			: (TimeSpan?)null;
+		//}
 	}
 }

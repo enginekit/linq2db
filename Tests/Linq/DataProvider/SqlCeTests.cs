@@ -17,6 +17,8 @@ using NUnit.Framework;
 
 namespace Tests.DataProvider
 {
+	using System.Globalization;
+
 	using Model;
 
 	[TestFixture]
@@ -91,7 +93,7 @@ namespace Tests.DataProvider
 			{
 				var sqlValue = expectedValue is bool ? (bool)(object)expectedValue? 1 : 0 : (object)expectedValue;
 
-				var sql = string.Format("SELECT Cast({0} as {1})", sqlValue ?? "NULL", sqlType);
+				var sql = string.Format(CultureInfo.InvariantCulture, "SELECT Cast({0} as {1})", sqlValue ?? "NULL", sqlType);
 
 				Debug.WriteLine(sql + " -> " + typeof(T));
 
@@ -404,12 +406,27 @@ namespace Tests.DataProvider
 			}
 		}
 
+		[Table(Name = "CreateTableTest", Schema = "IgnoreSchema", Database = "TestDatabase")]
+		public class CreateTableTest
+		{
+			[PrimaryKey, Identity]
+			public int Id;
+		}
+
 		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
 		public void CreateDatabase(string context)
 		{
-			SqlCeTools.CreateDatabase("TestDatabase");
-			Assert.IsTrue(File.Exists("TestDatabase.sdf"));
-			SqlCeTools.DropDatabase  ("TestDatabase");
+			SqlCeTools.CreateDatabase ("TestDatabase");
+			Assert.IsTrue(File.Exists ("TestDatabase.sdf"));
+
+			using (var db = new DataConnection(SqlCeTools.GetDataProvider(), "Data Source=TestDatabase.sdf"))
+			{
+				db.CreateTable<CreateTableTest>();
+				db.DropTable  <CreateTableTest>();
+			}
+
+			SqlCeTools.DropDatabase   ("TestDatabase");
+			Assert.IsFalse(File.Exists("TestDatabase.sdf"));
 		}
 
 		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
@@ -435,6 +452,42 @@ namespace Tests.DataProvider
 
 					db.GetTable<LinqDataTypes>().Delete(p => p.ID >= 4000);
 				}
+			}
+		}
+
+#if !NETSTANDARD
+		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
+		public void Issue695Test(string context)
+		{
+			using (var db = new DataConnection(context))
+			{
+				var sp = db.DataProvider.GetSchemaProvider();
+				var sh = sp.GetSchema(db);
+				var t  = sh.Tables.Single(_ => _.TableName.Equals("Issue695", StringComparison.OrdinalIgnoreCase));
+
+				Assert.AreEqual(2, t.Columns.Count);
+				Assert.AreEqual(1, t.Columns.Count(_ => _.IsPrimaryKey));
+				Assert.AreEqual(1, t.ForeignKeys.Count);
+			}
+		}
+#endif
+
+		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
+		public void SelectTableWithHintTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(Person, db.Person.With("TABLOCK"));
+			}
+		}
+
+		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
+		public void UpdateTableWithHintTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				Assert.AreEqual(Person.Count(),  db.Person.                Set(_ => _.FirstName, _ => _.FirstName).Update());
+				Assert.AreEqual(Person.Count(),  db.Person.With("TABLOCK").Set(_ => _.FirstName, _ => _.FirstName).Update());
 			}
 		}
 	}

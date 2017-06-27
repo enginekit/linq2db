@@ -69,7 +69,9 @@ namespace LinqToDB.Expressions
 
 				if (mapType != ex.Type)
 				{
-					var econv = mappingSchema.GetConvertExpression(ex.Type, mapType, false);
+					// Use only defined convert
+					var econv = mappingSchema.GetConvertExpression(ex.Type, type,    false, false) ??
+						        mappingSchema.GetConvertExpression(ex.Type, mapType, false);
 
 					if (econv.Body.GetCount(e => e == econv.Parameters[0]) > 1)
 					{
@@ -102,8 +104,9 @@ namespace LinqToDB.Expressions
 			}
 
 			// Add check null expression.
+			// Note: Oracle may return wrong IsDBNullAllowed, so added additional check toType != type, that means nullable type
 			//
-			if (dataContext.IsDBNullAllowed(dataReader, idx) ?? true)
+			if (toType != type || (dataContext.IsDBNullAllowed(dataReader, idx) ?? true))
 			{
 				ex = Condition(
 					Call(dataReaderExpr, _isDBNullInfo, Constant(idx)),

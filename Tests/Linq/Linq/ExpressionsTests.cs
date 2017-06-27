@@ -158,7 +158,7 @@ namespace Tests.Linq
 				select p;
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource(TestProvName.SQLiteMs)]
 		public void MethodExpression8(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -177,10 +177,10 @@ namespace Tests.Linq
 					select ch);
 		}
 
-		[Test]
-		public void MethodExpression9()
+		[Test, IncludeDataContextSource(ProviderName.SQLite)]
+		public void MethodExpression9(string context)
 		{
-			using (var db = new TestDataConnection())
+			using (var db = new TestDataConnection(context))
 				AreEqual(
 					from ch in Child
 					from p in
@@ -196,10 +196,10 @@ namespace Tests.Linq
 					select ch);
 		}
 
-		[Test]
-		public void MethodExpression10()
+		[Test, IncludeDataContextSource(ProviderName.SQLite)]
+		public void MethodExpression10(string context)
 		{
-			using (var db = new TestDataConnection())
+			using (var db = new TestDataConnection(context))
 				AreEqual(
 					from ch in Child
 					from p in
@@ -227,6 +227,7 @@ namespace Tests.Linq
 			return obj => obj != null;
 		}
 
+#if !MONO
 		[Test]
 		public void TestGenerics1()
 		{
@@ -240,6 +241,7 @@ namespace Tests.Linq
 				q.ToList();
 			}
 		}
+#endif
 
 		[ExpressionMethod("GetBoolExpression2_{0}")]
 		static bool GetBool2<T>(T obj)
@@ -406,6 +408,18 @@ namespace Tests.Linq
 			}
 		}
 
+		[Test, DataContextSource]
+		public void ToLowerInvariantTest(string context)
+		{
+			Expressions.MapMember((string s) => s.ToLowerInvariant(), (string s) => s.ToLower());
+
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(
+					   Doctor.Where(p => p.Taxonomy.ToLowerInvariant() == "psychiatry").Select(p => p.Taxonomy.ToLower()),
+					db.Doctor.Where(p => p.Taxonomy.ToLowerInvariant() == "psychiatry").Select(p => p.Taxonomy.ToLower()));
+			}
+		}
 		/*
 		[Test, DataContextSource]
 		public void LeftJoinTest3(string context)

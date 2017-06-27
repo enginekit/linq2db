@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Data.SqlClient;
 using System.Data.SqlTypes;
 using System.Linq;
@@ -9,6 +10,7 @@ using System.Linq.Expressions;
 
 namespace LinqToDB.DataProvider.SqlServer
 {
+	using Configuration;
 	using Common;
 	using Data;
 	using Extensions;
@@ -21,7 +23,7 @@ namespace LinqToDB.DataProvider.SqlServer
 		#region Init
 
 		public SqlServerDataProvider(string name, SqlServerVersion version)
-			: base(name, null)
+			: base(name, (MappingSchema)null)
 		{
 			Version = version;
 
@@ -33,11 +35,14 @@ namespace LinqToDB.DataProvider.SqlServer
 			}
 			else
 			{
-				SqlProviderFlags.IsApplyJoinSupported = true;
+				SqlProviderFlags.IsApplyJoinSupported    = true;
+				SqlProviderFlags.TakeHintsSupported      = TakeHints.Percent | TakeHints.WithTies;
 			}
 
-			SetCharField("char",  (r,i) => r.GetString(i).TrimEnd());
-			SetCharField("nchar", (r,i) => r.GetString(i).TrimEnd());
+			SetCharField("char",  (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharField("nchar", (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharFieldToType<char>("char",  (r, i) => DataTools.GetChar(r, i));
+			SetCharFieldToType<char>("nchar", (r, i) => DataTools.GetChar(r, i));
 
 			if (!Configuration.AvoidSpecificDataProviderAPI)
 			{
@@ -146,14 +151,15 @@ namespace LinqToDB.DataProvider.SqlServer
 
 		public override bool IsCompatibleConnection(IDbConnection connection)
 		{
-			return typeof(SqlConnection).IsSameOrParentOf(connection.GetType());
+			return typeof(SqlConnection).IsSameOrParentOf(Proxy.GetUnderlyingObject((DbConnection)connection).GetType());
 		}
 
+#if !NETSTANDARD
 		public override ISchemaProvider GetSchemaProvider()
 		{
 			return Version == SqlServerVersion.v2000 ? new SqlServer2000SchemaProvider() : new SqlServerSchemaProvider();
 		}
-
+#endif
 		static readonly ConcurrentDictionary<string,bool> _marsFlags = new ConcurrentDictionary<string,bool>();
 
 		public override object GetConnectionInfo(DataConnection dataConnection, string parameterName)
@@ -194,7 +200,12 @@ namespace LinqToDB.DataProvider.SqlServer
 						string s;
 						if (value != null && _udtTypes.TryGetValue(value.GetType(), out s))
 							if (parameter is SqlParameter)
+#if NETSTANDARD
+								((SqlParameter)parameter).TypeName = s;
+#else
 								((SqlParameter)parameter).UdtTypeName = s;
+#endif
+
 					}
 
 					break;
@@ -237,7 +248,7 @@ namespace LinqToDB.DataProvider.SqlServer
 			}
 		}
 
-		#endregion
+#endregion
 
 		#region Udt support
 

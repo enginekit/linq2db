@@ -16,6 +16,13 @@ namespace LinqToDB.Linq.Builder
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
 			var sequence = builder.BuildSequence(new BuildInfo(buildInfo, methodCall.Arguments[0]));
+
+			if (sequence.SelectQuery.Select.TakeValue != null ||
+			    sequence.SelectQuery.Select.SkipValue != null)
+			{
+				sequence = new SubQueryContext(sequence);
+			}
+
 			return new ContainsContext(buildInfo.Parent, methodCall, sequence);
 		}
 
@@ -23,6 +30,14 @@ namespace LinqToDB.Linq.Builder
 			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression param)
 		{
 			return null;
+		}
+
+		public static bool IsConstant(MethodCallExpression methodCall)
+		{
+			if (!methodCall.IsQueryable("Contains"))
+				return false;
+
+			return methodCall.IsQueryable(false) == false;
 		}
 
 		class ContainsContext : SequenceContextBase
@@ -113,7 +128,7 @@ namespace LinqToDB.Linq.Builder
 					var args      = _methodCall.Method.GetGenericArguments();
 					var param     = Expression.Parameter(args[0], "param");
 					var expr      = _methodCall.Arguments[1];
-					var condition = Expression.Lambda(Expression.Equal(param, expr), param);
+					var condition = Expression.Lambda(ExpressionBuilder.Equal(Builder.MappingSchema, param, expr), param);
 
 					IBuildContext ctx = new ExpressionContext(Parent, Sequence, condition);
 

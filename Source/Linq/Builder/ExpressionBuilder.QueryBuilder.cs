@@ -9,8 +9,12 @@ using System.Threading;
 
 namespace LinqToDB.Linq.Builder
 {
+	using Common;
+
 	using LinqToDB.Expressions;
 	using Extensions;
+
+	using Mapping;
 
 	partial class ExpressionBuilder
 	{
@@ -60,8 +64,14 @@ namespace LinqToDB.Linq.Builder
 
 							var ma = (MemberExpression)expr;
 
-							if (Expressions.ConvertMember(MappingSchema, ma.Expression == null ? null : ma.Expression.Type, ma.Member) != null)
+							var l  = Expressions.ConvertMember(MappingSchema, ma.Expression == null ? null : ma.Expression.Type, ma.Member);
+							if (l != null)
+							{
+								// In Grouping KeyContext whe have to perform calculation on server side
+								if (Contexts.Any(c => c is GroupByBuilder.KeyContext))
+									return new TransformInfo(BuildSql(context, expr));
 								break;
+							}
 
 							if (ma.Member.IsNullableValueMember())
 								break;
@@ -95,7 +105,7 @@ namespace LinqToDB.Linq.Builder
 										var table = (TableBuilder.AssociatedTableContext)res.Context;
 										if (table.IsList)
 										{
-											var mexpr = GetMultipleQueryExpression(context, ma, new HashSet<ParameterExpression>());
+											var mexpr = GetMultipleQueryExpression(context, MappingSchema, ma, new HashSet<ParameterExpression>());
 											return new TransformInfo(BuildExpression(context, mexpr));
 										}
 									}
@@ -296,7 +306,7 @@ namespace LinqToDB.Linq.Builder
 		Expression BuildSql(IBuildContext context, Expression expression)
 		{
 			var sqlex = ConvertToSqlExpression(context, expression);
-			var idx   = context.SelectQuery.Select.Add(sqlex);
+			var idx   = context.SelectQuery.Select.AddNew(sqlex);
 
 			idx = context.ConvertToParentIndex(idx, context);
 
@@ -322,7 +332,7 @@ namespace LinqToDB.Linq.Builder
 
 		public Expression BuildSql(Type type, int idx)
 		{
-			return new ConvertFromDataReaderExpression(type, idx, DataReaderLocal, DataContextInfo.DataContext);
+			return new ConvertFromDataReaderExpression(type, idx, DataReaderLocal, DataContext);
 		}
 
 		#endregion
@@ -478,34 +488,29 @@ namespace LinqToDB.Linq.Builder
 				return Expression.Call(
 					null,
 					MemberHelper.MethodOf(() => ExecuteSubQuery(null, null, null)),
-						ContextParam,
+						DataContextParam,
 						Expression.NewArrayInit(typeof(object), parameters),
 						Expression.Constant(queryReader)
 					);
 			}
 
 			static TRet ExecuteSubQuery(
-				QueryContext                     queryContext,
+				IDataContext                     dataContext,
 				object[]                         parameters,
 				Func<IDataContext,object[],TRet> queryReader)
 			{
-				var db = queryContext.GetDataContext();
+				var db = dataContext.Clone(true);
 
-				try
-				{
-					return queryReader(db.DataContextInfo.DataContext, parameters);
-				}
-				finally
-				{
-					queryContext.ReleaseDataContext(db);
-				}
+				db.CloseAfterUse = true;
+
+				return queryReader(db, parameters);
 			}
 		}
 
 		static readonly MethodInfo _whereMethodInfo =
 			MemberHelper.MethodOf(() => LinqExtensions.Where<int,int,object>(null,null)).GetGenericMethodDefinition();
 
-		static Expression GetMultipleQueryExpression(IBuildContext context, Expression expression, HashSet<ParameterExpression> parameters)
+		static Expression GetMultipleQueryExpression(IBuildContext context, MappingSchema mappringSchema, Expression expression, HashSet<ParameterExpression> parameters)
 		{
 			if (!Common.Configuration.Linq.AllowMultipleQuery)
 				throw new LinqException("Multiple queries are not allowed. Set the 'LinqToDB.Common.Configuration.Linq.AllowMultipleQuery' flag to 'true' to allow multiple queries.");
@@ -540,7 +545,7 @@ namespace LinqToDB.Linq.Builder
 									if (table.IsList)
 									{
 										var ttype  = typeof(Table<>).MakeGenericType(table.ObjectType);
-										var tbl    = Activator.CreateInstance(ttype);
+										var tbl    = Activator.CreateInstance(ttype, context.Builder.DataContext);
 										var method = e == expression ?
 											MemberHelper.MethodOf<IEnumerable<bool>>(n => n.Where(a => a)).GetGenericMethodDefinition().MakeGenericMethod(table.ObjectType) :
 											_whereMethodInfo.MakeGenericMethod(e.Type, table.ObjectType, ttype);
@@ -557,9 +562,10 @@ namespace LinqToDB.Linq.Builder
 											var field1 = table.ParentAssociation.SqlTable.Fields[table.Association.ThisKey [i]];
 											var field2 = table.                  SqlTable.Fields[table.Association.OtherKey[i]];
 
-											var ee = Expression.Equal(
-												Expression.MakeMemberAccess(op,            field2.ColumnDescriptor.MemberInfo),
-												Expression.MakeMemberAccess(me.Expression, field1.ColumnDescriptor.MemberInfo));
+											var ma1 = Expression.MakeMemberAccess(op,            field2.ColumnDescriptor.MemberInfo);
+											var ma2 = Expression.MakeMemberAccess(me.Expression, field1.ColumnDescriptor.MemberInfo);
+
+											var ee = Equal(mappringSchema, ma1, ma2);
 
 											ex = ex == null ? ee : Expression.AndAlso(ex, ee);
 										}
@@ -592,7 +598,7 @@ namespace LinqToDB.Linq.Builder
 		{
 			var parameters = new HashSet<ParameterExpression>();
 
-			expression = GetMultipleQueryExpression(context, expression, parameters);
+			expression = GetMultipleQueryExpression(context, MappingSchema, expression, parameters);
 
 			var paramex = Expression.Parameter(typeof(object[]), "ps");
 			var parms   = new List<Expression>();

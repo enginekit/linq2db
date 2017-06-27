@@ -15,7 +15,7 @@ namespace LinqToDB.Metadata
 	{
 		readonly Dictionary<string,MetaTypeInfo> _types;
 
-#if !NETFX_CORE
+#if !NETFX_CORE && !NETSTANDARD
 		public XmlAttributeReader(string xmlFile)
 			: this(xmlFile, Assembly.GetCallingAssembly())
 		{
@@ -31,7 +31,7 @@ namespace LinqToDB.Metadata
 
 			try
 			{
-#if !SILVERLIGHT && !NETFX_CORE
+#if !SILVERLIGHT && !NETFX_CORE && !NETSTANDARD
 				if (File.Exists(xmlFile))
 				{
 					streamReader = File.OpenText(xmlFile);
@@ -154,11 +154,9 @@ namespace LinqToDB.Metadata
 			return Array<T>.Empty;
 		}
 
-		public T[] GetAttributes<T>(MemberInfo memberInfo, bool inherit = true)
+		public T[] GetAttributes<T>(Type type, MemberInfo memberInfo, bool inherit = true)
 			where T : Attribute
 		{
-			var type = memberInfo.DeclaringType;
-
 			MetaTypeInfo t;
 
 			if (_types.TryGetValue(type.FullName, out t) || _types.TryGetValue(type.Name, out t))

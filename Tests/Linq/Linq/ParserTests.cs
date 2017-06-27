@@ -4,6 +4,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 using LinqToDB;
+using LinqToDB.DataProvider.Oracle;
+using LinqToDB.Extensions;
 using LinqToDB.Linq;
 using LinqToDB.Linq.Builder;
 using LinqToDB.SqlQuery;
@@ -866,7 +868,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void Join6(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -884,17 +886,68 @@ namespace Tests.Linq
 
 				CompareSql(sql, @"
 					SELECT
-						[g].[ParentID],
-						[g].[ChildID],
-						[g].[GrandChildID]
+						[g1].[ParentID],
+						[g1].[ChildID],
+						[g1].[GrandChildID]
 					FROM
-						[GrandChild] [g]
-							LEFT JOIN [Child] [t1] ON [g].[ParentID] = [t1].[ParentID] AND [g].[ChildID] = [t1].[ChildID]
+						[GrandChild] [g1]
+							LEFT JOIN [Child] [t1] ON [g1].[ParentID] = [t1].[ParentID] AND [g1].[ChildID] = [t1].[ChildID]
 							INNER JOIN [Parent] [p] ON [t1].[ParentID] = [p].[ParentID]");
 			}
 		}
 
 		#endregion
+
+		[Test]
+		public void OracleXmlTable()
+		{
+			using (var db = new TestDataConnection())
+			{
+				Assert.IsNotNull(db.OracleXmlTable<Person>(() => "<xml/>"));
+				Assert.IsNotNull(db.OracleXmlTable<Person>("<xml/>"));
+				Assert.IsNotNull(db.OracleXmlTable<Person>(new [] {new Person(), }));
+
+			}
+
+		}
+
+		[Test]
+		public void Issue95Test()
+		{
+			using (var db = new TestDataConnection())
+			{
+				var q   = db.GetTable<Issue95Entity>().Where(_ => _.EnumValue == TinyIntEnum.Value1);
+				var ctx = q.GetMyContext();
+				Assert.IsNull(QueryVisitor.Find(ctx.SelectQuery.Where, _ => _.ElementType == QueryElementType.SqlExpression), db.GetSqlText(ctx.SelectQuery));
+
+				q   = db.GetTable<Issue95Entity>().Where(_ => TinyIntEnum.Value1 == _.EnumValue);
+				ctx = q.GetMyContext();
+				Assert.IsNull(QueryVisitor.Find(ctx.SelectQuery.Where, _ => _.ElementType == QueryElementType.SqlExpression), db.GetSqlText(ctx.SelectQuery));
+
+				var p = TinyIntEnum.Value2;
+
+				q   = db.GetTable<Issue95Entity>().Where(_ => _.EnumValue == p);
+				ctx = q.GetMyContext();
+				Assert.IsNull(QueryVisitor.Find(ctx.SelectQuery.Where, _ => _.ElementType == QueryElementType.SqlExpression), db.GetSqlText(ctx.SelectQuery));
+
+				q   = db.GetTable<Issue95Entity>().Where(_ => p == _.EnumValue);
+				ctx = q.GetMyContext();
+				Assert.IsNull(QueryVisitor.Find(ctx.SelectQuery.Where, _ => _.ElementType == QueryElementType.SqlExpression), db.GetSqlText(ctx.SelectQuery));
+
+			}
+
+		}
+	}
+
+	enum TinyIntEnum : byte
+	{
+		Value1,
+		Value2
+	}
+
+	class Issue95Entity
+	{
+		public TinyIntEnum EnumValue;
 	}
 
 	class MyContextParser : ISequenceBuilder
@@ -940,12 +993,20 @@ namespace Tests.Linq
 	{
 		public static MyContextParser.Context GetMyContext<T>(this IQueryable<T> source)
 		{
+
 			if (source == null) throw new ArgumentNullException("source");
+
+			var methodInfo = typeof(Extensions).GetMethods()
+				.Single(method => method.Name == "GetMyContext" 
+				&& method.GetParameters()
+				.ElementAt(0)
+				.ParameterType
+				.GetGenericTypeDefinition() == typeof(IQueryable<>));
 
 			return source.Provider.Execute<MyContextParser.Context>(
 				Expression.Call(
 					null,
-					((MethodInfo)MethodBase.GetCurrentMethod()).MakeGenericMethod(new[] { typeof(T) }),
+					methodInfo.MakeGenericMethod(new[] { typeof(T) }),
 					new[] { source.Expression }));
 		}
 	}

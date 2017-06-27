@@ -91,15 +91,19 @@ namespace LinqToDB.Linq.Builder
 
 		public ExpressionBuilder(
 			Query                 query,
-			IDataContextInfo      dataContext,
+			IDataContext          dataContext,
 			Expression            expression,
 			ParameterExpression[] compiledParameters)
 		{
 			_query               = query;
+
+			if (Configuration.Linq.UseBinaryAggregateExpression)
+				expression = AggregateExpression(expression);
+
 			_expressionAccessors = expression.GetExpressionAccessors(ExpressionParam);
 
 			CompiledParameters   = compiledParameters;
-			DataContextInfo      = dataContext;
+			DataContext          = dataContext;
 			OriginalExpression   = expression;
 
 			_visitedExpressions  = new HashSet<Expression>();
@@ -112,16 +116,15 @@ namespace LinqToDB.Linq.Builder
 			}
 			else
 			{
-				DataReaderLocal = BuildVariable(Expression.Convert(DataReaderParam, dataContext.DataContext.DataReaderType), "ldr");
+				DataReaderLocal = BuildVariable(Expression.Convert(DataReaderParam, dataContext.DataReaderType), "ldr");
 			}
 		}
-
 
 		#endregion
 
 		#region Public Members
 
-		public readonly IDataContextInfo      DataContextInfo;
+		public readonly IDataContext          DataContext;
 		public readonly Expression            OriginalExpression;
 		public readonly Expression            Expression;
 		public readonly ParameterExpression[] CompiledParameters;
@@ -136,7 +139,7 @@ namespace LinqToDB.Linq.Builder
 
 		public MappingSchema MappingSchema
 		{
-			get { return DataContextInfo.MappingSchema; }
+			get { return DataContext.MappingSchema; }
 		}
 
 		#endregion
@@ -232,8 +235,9 @@ namespace LinqToDB.Linq.Builder
 
 		Expression ConvertExpressionTree(Expression expression)
 		{
-			var expr = ConvertParameters(expression);
+			var expr = expression;
 
+			expr = ConvertParameters (expr);
 			expr = ExposeExpression  (expr);
 			expr = OptimizeExpression(expr);
 
@@ -271,7 +275,7 @@ namespace LinqToDB.Linq.Builder
 				{
 					if (isQueryable)
 					{
-						var p = sequence.ExpressionsToReplace.SingleOrDefault(s => s.Path.NodeType == ExpressionType.Parameter);
+						var p = sequence.ExpressionsToReplace.Single(s => s.Path.NodeType == ExpressionType.Parameter);
 
 						return Expression.Call(
 							((MethodCallExpression)expr).Method.DeclaringType,
@@ -291,6 +295,48 @@ namespace LinqToDB.Linq.Builder
 		}
 
 		#region ConvertParameters
+
+		Expression AggregateExpression(Expression expression)
+		{
+			return expression.Transform(expr =>
+			{
+				switch (expr.NodeType)
+				{
+					case ExpressionType.Or      :
+					case ExpressionType.And     :
+					case ExpressionType.OrElse  :
+					case ExpressionType.AndAlso :
+						{
+							var stack  = new Stack<Expression>();
+							var items  = new List<Expression>();
+							var binary = (BinaryExpression) expr;
+
+							stack.Push(binary.Right);
+							stack.Push(binary.Left);
+							while (stack.Count > 0)
+							{
+								var item = stack.Pop();
+								if (item.NodeType == expr.NodeType)
+								{
+									binary  = (BinaryExpression) item;
+									stack.Push(binary.Right);
+									stack.Push(binary.Left);
+								}
+								else
+									items.Add(item);
+							}
+
+							if (items.Count > 2)
+							{
+								return new BinaryAggregateExpression(expr.NodeType, expr.Type, items.ToArray());
+							}
+							break;
+						}
+				}
+
+				return expr;
+			});
+		}
 
 		Expression ConvertParameters(Expression expression)
 		{
@@ -332,7 +378,7 @@ namespace LinqToDB.Linq.Builder
 					case ExpressionType.MemberAccess:
 						{
 							var me = (MemberExpression)expr;
-							var l  = ConvertMethodExpression(me.Member);
+							var l  = ConvertMethodExpression(me.Member.ReflectedTypeEx(), me.Member);
 
 							if (l != null)
 							{
@@ -421,8 +467,13 @@ namespace LinqToDB.Linq.Builder
 							var isList = typeof(ICollection).IsAssignableFromEx(me.Member.DeclaringType);
 
 							if (!isList)
+								isList =
+									me.Member.DeclaringType.IsGenericTypeEx() &&
+									me.Member.DeclaringType.GetGenericTypeDefinition() == typeof(ICollection<>);
+
+							if (!isList)
 								isList = me.Member.DeclaringType.GetInterfacesEx()
-									.Any(t => t.IsGenericTypeEx() && t.GetGenericTypeDefinition() == typeof(IList<>));
+									.Any(t => t.IsGenericTypeEx() && t.GetGenericTypeDefinition() == typeof(ICollection<>));
 
 							if (isList)
 							{
@@ -474,7 +525,7 @@ namespace LinqToDB.Linq.Builder
 						}
 						else
 						{
-							var l = ConvertMethodExpression(call.Method);
+							var l = ConvertMethodExpression(call.Method.ReflectedTypeEx(), call.Method);
 
 							if (l != null)
 								return new TransformInfo(OptimizeExpression(ConvertMethod(call, l)));
@@ -500,9 +551,9 @@ namespace LinqToDB.Linq.Builder
 			return new TransformInfo(expr);
 		}
 
-		LambdaExpression ConvertMethodExpression(MemberInfo mi)
+		LambdaExpression ConvertMethodExpression(Type type, MemberInfo mi)
 		{
-			var attr = MappingSchema.GetAttribute<ExpressionMethodAttribute>(mi, a => a.Configuration);
+			var attr = MappingSchema.GetAttribute<ExpressionMethodAttribute>(type, mi, a => a.Configuration);
 
 			if (attr != null)
 			{
@@ -825,7 +876,7 @@ namespace LinqToDB.Linq.Builder
 						Key     = key,
 						Element = selectParam
 					})
-					.GroupBy(_ => _.Key, elemParam => e)
+					.GroupBy(underscore => underscore.Key, elemParam => e)
 					;
 
 				var body    = func.Body.Unwrap();
@@ -843,7 +894,7 @@ namespace LinqToDB.Linq.Builder
 						Key     = key,
 						Element = selectParam
 					})
-					.GroupBy(_ => _.Key, elemParam => e)
+					.GroupBy(underscore => underscore.Key, elemParam => e)
 					;
 
 				var body    = func.Body.Unwrap();
@@ -861,7 +912,7 @@ namespace LinqToDB.Linq.Builder
 						Key     = key,
 						Element = selectParam
 					})
-					.GroupBy(_ => _.Key, elemParam => e)
+					.GroupBy(underscore => underscore.Key, elemParam => e)
 					.Select (resParam => r)
 					;
 
@@ -881,7 +932,7 @@ namespace LinqToDB.Linq.Builder
 						Key     = key,
 						Element = selectParam
 					})
-					.GroupBy(_ => _.Key, elemParam => e)
+					.GroupBy(underscore => underscore.Key, elemParam => e)
 					.Select (resParam => r)
 					;
 
@@ -1225,7 +1276,7 @@ namespace LinqToDB.Linq.Builder
 			{
 				var p    = Expression.Parameter(typeof(Expression), "exp");
 				var exas = expression.GetExpressionAccessors(p);
-				var expr = ReplaceParameter(exas, expression, _ => {});
+				var expr = ReplaceParameter(exas, expression, _ => {}).ValueExpression;
 
 				if (expr.Find(e => e.NodeType == ExpressionType.Parameter && e != p) != null)
 					return expression;
@@ -1326,6 +1377,48 @@ namespace LinqToDB.Linq.Builder
 		}
 
 		#endregion
+
+		#endregion
+
+		#region Helpers
+
+		/// <summary>
+		/// Gets Expression.Equal if <see cref="left"/> and <see cref="right"/> expression types are not same
+		/// <see cref="right"/> would be converted to <see cref="left"/>
+		/// </summary>
+		/// <param name="mappringSchema"></param>
+		/// <param name="left"></param>
+		/// <param name="right"></param>
+		/// <returns></returns>
+		internal static BinaryExpression Equal(MappingSchema mappringSchema, Expression left, Expression right)
+		{
+			if (left.Type != right.Type)
+			{
+				if (right.Type.CanConvertTo(left.Type))
+					right = Expression.Convert(right, left.Type);
+				else if (left.Type.CanConvertTo(right.Type))
+					left = Expression.Convert(left, right.Type);
+				else
+				{
+					var rightConvert = ConvertBuilder.GetConverter(mappringSchema, right.Type, left. Type);
+					var leftConvert  = ConvertBuilder.GetConverter(mappringSchema, left. Type, right.Type);
+
+					var leftIsPrimitive  = left. Type.IsPrimitiveEx();
+					var rightIsPrimitive = right.Type.IsPrimitiveEx();
+
+					if (leftIsPrimitive == true && rightIsPrimitive == false && rightConvert.Item2 != null)
+						right = rightConvert.Item2.GetBody(right);
+					else if (leftIsPrimitive == false && rightIsPrimitive == true && leftConvert.Item2 != null)
+						left = leftConvert.Item2.GetBody(left);
+					else if (rightConvert.Item2 != null)
+						right = rightConvert.Item2.GetBody(right);
+					else if (leftConvert.Item2 != null)
+						left = leftConvert.Item2.GetBody(left);
+				}
+			}
+
+			return Expression.Equal(left, right);
+		}
 
 		#endregion
 	}

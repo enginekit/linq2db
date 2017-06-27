@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Reflection;
+using LinqToDB.Common;
+using LinqToDB.Extensions;
 
 namespace LinqToDB.DataProvider.Sybase
 {
@@ -14,13 +16,12 @@ namespace LinqToDB.DataProvider.Sybase
 
 		static readonly SybaseDataProvider _sybaseDataProvider = new SybaseDataProvider();
 
+#pragma warning disable 3015, 219
 		static SybaseTools()
 		{
 			try
 			{
-				var path = typeof(SybaseTools).Assembly.CodeBase.Replace("file:///", "");
-
-				path = Path.GetDirectoryName(path);
+				var path = typeof(SybaseTools).AssemblyEx().GetPath();
 
 				var _ =
 					File.Exists(Path.Combine(path, (AssemblyName = "Sybase.AdoNet45.AseClient") + ".dll")) ||
@@ -34,6 +35,7 @@ namespace LinqToDB.DataProvider.Sybase
 
 			DataConnection.AddDataProvider(_sybaseDataProvider);
 		}
+#pragma warning restore 3015, 219
 
 		public static IDataProvider GetDataProvider()
 		{

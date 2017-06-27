@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 
 namespace LinqToDB.DataProvider.Oracle
 {
+	using Configuration;
 	using Data;
 	using SqlProvider;
+	using Extensions;
 
 	class OracleBulkCopy : BasicBulkCopy
 	{
@@ -39,9 +42,9 @@ namespace LinqToDB.DataProvider.Oracle
 				if (_bulkCopyCreator == null)
 				{
 					var clientNamespace    = ((OracleDataProvider)dataConnection.DataProvider).AssemblyName + ".Client.";
-					var bulkCopyType       = _connectionType.Assembly.GetType(clientNamespace + "OracleBulkCopy",              false);
-					var bulkCopyOptionType = _connectionType.Assembly.GetType(clientNamespace + "OracleBulkCopyOptions",       false);
-					var columnMappingType  = _connectionType.Assembly.GetType(clientNamespace + "OracleBulkCopyColumnMapping", false);
+					var bulkCopyType       = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopy",              false);
+					var bulkCopyOptionType = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopyOptions",       false);
+					var columnMappingType  = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopyColumnMapping", false);
 
 					if (bulkCopyType != null)
 					{
@@ -53,14 +56,14 @@ namespace LinqToDB.DataProvider.Oracle
 				if (_bulkCopyCreator != null)
 				{
 					var columns = descriptor.Columns.Where(c => !c.SkipOnInsert).ToList();
-					var rd      = new BulkCopyReader(_dataProvider, columns, source);
+					var rd      = new BulkCopyReader(_dataProvider, dataConnection.MappingSchema, columns, source);
 					var rc      = new BulkCopyRowsCopied();
 
 					var bcOptions = 0; // Default
 
 					if (options.UseInternalTransaction == true) bcOptions |= 1; // UseInternalTransaction = 1,
 
-					using (var bc = _bulkCopyCreator(dataConnection.Connection, bcOptions))
+					using (var bc = _bulkCopyCreator(Proxy.GetUnderlyingObject((DbConnection)dataConnection.Connection), bcOptions))
 					{
 						dynamic dbc = bc;
 
@@ -126,7 +129,7 @@ namespace LinqToDB.DataProvider.Oracle
 		BulkCopyRowsCopied MultipleRowsCopy1<T>(
 			DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
 		{
-			var helper = new MultipleRowsHelper<T>(dataConnection, options, false);
+			var helper = new MultipleRowsHelper<T>(dataConnection, options, options.KeepIdentity ?? false);
 
 			helper.StringBuilder.AppendLine("INSERT ALL");
 			helper.SetHeader();
@@ -143,7 +146,7 @@ namespace LinqToDB.DataProvider.Oracle
 				helper.StringBuilder.Length -= 2;
 
 				helper.StringBuilder.Append(") VALUES (");
-				helper.BuildColumns(item);
+				helper.BuildColumns(item, _ => _.DataType == DataType.Text || _.DataType == DataType.NText);
 				helper.StringBuilder.AppendLine(")");
 
 				helper.RowsCopied.RowsCopied++;
@@ -169,7 +172,7 @@ namespace LinqToDB.DataProvider.Oracle
 		BulkCopyRowsCopied MultipleRowsCopy2<T>(
 			DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
 		{
-			var helper = new MultipleRowsHelper<T>(dataConnection, options, false);
+			var helper = new MultipleRowsHelper<T>(dataConnection, options, options.KeepIdentity ?? false);
 
 			helper.StringBuilder.AppendFormat("INSERT INTO {0} (", helper.TableName);
 
@@ -184,6 +187,8 @@ namespace LinqToDB.DataProvider.Oracle
 
 			for (var i = 0; i < helper.Columns.Length; i++)
 				helper.StringBuilder.Append(":p" + ( i + 1)).Append(", ");
+
+			helper.StringBuilder.Length -= 2;
 
 			helper.StringBuilder.AppendLine(")");
 			helper.SetHeader();
@@ -201,6 +206,8 @@ namespace LinqToDB.DataProvider.Oracle
 				{
 					if (!Execute(dataConnection, helper, list))
 						return helper.RowsCopied;
+
+					list.Clear();
 				}
 			}
 
@@ -222,7 +229,7 @@ namespace LinqToDB.DataProvider.Oracle
 					: column.DataType;
 				//var type     = dataConnection.DataProvider.ConvertParameterType(column.MemberType, dataType);
 
-				helper.Parameters.Add(new DataParameter(":p" + (i + 1), list.Select(o => column.GetValue(o)).ToArray(), dataType)
+				helper.Parameters.Add(new DataParameter(":p" + (i + 1), list.Select(o => column.GetValue(dataConnection.MappingSchema, o)).ToArray(), dataType)
 				{
 					Direction = ParameterDirection.Input,
 					IsArray   = true,
